@@ -1,0 +1,26 @@
+{
+  "id": "webgl-preview",
+  "name": "WebGL Preview",
+  "version": "1.0.0",
+  "type": "frontend",
+  "entry": {
+    "frontend": "/embed.html"
+  },
+  "permissions": [],
+  "scopes": [
+    "webgl.preview.open"
+  ],
+  "ui": {
+    "mode": "iframe",
+    "title": "WebGL Preview",
+    "description": "Open the packaged Unity WebGL preview in the XRUGC plugin host."
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {}
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {}
+  }
+}
