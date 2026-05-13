@@ -20,6 +20,28 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
+const lfsManagedBuildFiles = [
+  'public/Build/Web Preview.data.gz',
+  'public/Build/Web Preview.framework.js.gz',
+  'public/Build/Web Preview.wasm.gz',
+];
+
+for (const file of lfsManagedBuildFiles) {
+  const absolutePath = path.join(root, file);
+  const stat = fs.statSync(absolutePath);
+  const head = fs.readFileSync(absolutePath, 'utf8').slice(0, 128);
+
+  if (head.includes('https://git-lfs.github.com/spec/v1')) {
+    console.error(`Build asset is still a Git LFS pointer: ${file}`);
+    process.exit(1);
+  }
+
+  if (stat.size < 1024) {
+    console.error(`Build asset is unexpectedly small: ${file} (${stat.size} bytes)`);
+    process.exit(1);
+  }
+}
+
 const manifest = JSON.parse(
   fs.readFileSync(path.join(root, 'public/plugin/manifest.json'), 'utf8')
 );
