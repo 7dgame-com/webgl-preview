@@ -1,0 +1,28 @@
+services:
+  webgl-preview:
+    image: ${WEBGL_PREVIEW_IMAGE:-hkccr.ccs.tencentyun.com/plugins/webgl-preview:latest}
+    networks:
+      - proxy
+    environment:
+      - NODE_ENV=production
+      - PORT=3006
+      - HOST=0.0.0.0
+      - PLUGIN_ID=webgl-preview
+    labels:
+      - traefik.enable=true
+      - "traefik.http.routers.webgl-preview.rule=Host(`${WEBGL_PREVIEW_HOST:-webgl-preview.d.plugins.xrugc.com}`)"
+      - traefik.http.routers.webgl-preview.entrypoints=websecure
+      - traefik.http.routers.webgl-preview.tls.certresolver=letsencrypt
+      - traefik.http.services.webgl-preview.loadbalancer.server.port=3006
+      - traefik.docker.network=proxy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3006/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+networks:
+  proxy:
+    external: true
