@@ -4,6 +4,13 @@ import express from 'express';
 import cors from 'cors';
 import { createPluginRouter } from './plugin/routes';
 import { PUBLIC_DIR } from './config';
+import { ok } from './common/response';
+import { requestLogger } from './middleware/requestLogger';
+import {
+  setUnityStaticHeaders,
+  unityGzipHeaders,
+} from './middleware/unityStaticHeaders';
+import { getRuntimeStatus } from './plugin/helpers';
 
 const app = express();
 
@@ -11,48 +18,20 @@ app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
-app.use((req, _res, next) => {
-  console.info(`request method=${req.method} path=${req.path}`);
-  next();
-});
+app.use(requestLogger);
 
 app.get('/api/health', (_req, res) => {
-  res.json({
-    success: true,
-    data: {
-      status: 'ok',
-      plugin: 'webgl-preview',
-      publicDirExists: fs.existsSync(PUBLIC_DIR),
-    },
-  });
+  ok(res, getRuntimeStatus(PUBLIC_DIR));
 });
 
 app.use('/plugin', createPluginRouter());
 
-app.use((req, res, next) => {
-  if (!req.path.endsWith('.gz')) {
-    next();
-    return;
-  }
-
-  res.setHeader('Content-Encoding', 'gzip');
-  if (req.path.endsWith('.wasm.gz')) {
-    res.setHeader('Content-Type', 'application/wasm');
-  } else if (req.path.endsWith('.js.gz')) {
-    res.setHeader('Content-Type', 'application/javascript');
-  } else if (req.path.endsWith('.data.gz')) {
-    res.setHeader('Content-Type', 'application/octet-stream');
-  }
-  next();
-});
+app.use(unityGzipHeaders);
 
 app.use(
   express.static(PUBLIC_DIR, {
     index: false,
-    setHeaders: (res) => {
-      res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
-      res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-    },
+    setHeaders: setUnityStaticHeaders,
   })
 );
 

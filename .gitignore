@@ -1,6 +1,14 @@
 node_modules/
 dist/
+coverage/
+logs/
 .DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*.tsbuildinfo
 
 *.log
 npm-debug.log*

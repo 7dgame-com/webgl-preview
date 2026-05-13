@@ -28,4 +28,9 @@ if (manifest.id !== 'webgl-preview') {
   process.exit(1);
 }
 
+if (manifest.entry?.frontend !== '/embed.html') {
+  console.error(`Unexpected frontend entry: ${manifest.entry?.frontend}`);
+  process.exit(1);
+}
+
 console.log('webgl-preview self-check passed');

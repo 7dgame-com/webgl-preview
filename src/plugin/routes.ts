@@ -1,15 +1,17 @@
 import { Router, Request, Response } from 'express';
-import manifest from './manifest.json';
-
-function ok(res: Response, data: unknown): void {
-  res.json({ success: true, data });
-}
+import { PUBLIC_DIR } from '../config';
+import { ok } from '../common/response';
+import { getPluginManifest, getRuntimeStatus } from './helpers';
 
 export function createPluginRouter(): Router {
   const router = Router();
 
   router.get('/manifest', (_req: Request, res: Response) => {
-    ok(res, manifest);
+    ok(res, getPluginManifest());
+  });
+
+  router.get('/health', (_req: Request, res: Response) => {
+    ok(res, getRuntimeStatus(PUBLIC_DIR));
   });
 
   return router;

@@ -1,9 +1,16 @@
 # WebGL Preview
 
-Unity WebGL 运行预览插件，结构参考 `plugins/apk-rebuilder`：使用
-`Node.js + Express + TypeScript` 提供插件 manifest 和静态 WebGL 入口。
+Unity WebGL preview plugin for XRUGC. The service is a small
+`Node.js + Express + TypeScript` app that serves the packaged Unity WebGL
+runtime and exposes host-facing plugin discovery endpoints.
 
-## 启动
+## Docs
+
+- [README-quickstart.md](./README-quickstart.md) - shortest local and Docker path.
+- [docs/STRUCTURE.md](./docs/STRUCTURE.md) - repository layout and module boundaries.
+- [docs/INTEGRATION.md](./docs/INTEGRATION.md) - host registration and Portainer notes.
+
+## Quick Start
 
 ```bash
 npm install
@@ -11,11 +18,11 @@ npm run build
 npm start
 ```
 
-默认访问：
+Default endpoints:
 
-- 插件入口：`http://127.0.0.1:3006/embed.html`
-- 健康检查：`http://127.0.0.1:3006/api/health`
-- 插件 manifest：`http://127.0.0.1:3006/plugin/manifest`
+- Page: `http://127.0.0.1:3006/embed.html`
+- Health: `http://127.0.0.1:3006/api/health`
+- Plugin manifest: `http://127.0.0.1:3006/plugin/manifest`
 
 ## Docker
 
@@ -23,7 +30,7 @@ npm start
 docker compose up -d --build
 ```
 
-## 宿主插件配置参考
+## Host Registration Example
 
 ```json
 {
@@ -37,6 +44,12 @@ docker compose up -d --build
 }
 ```
 
-> Unity WebGL 的 `.gz` 资源需要正确的 `Content-Encoding` 和 `Content-Type`，
-> 本插件服务已在 Express 中针对 `.data.gz`、`.framework.js.gz`、
-> `.wasm.gz` 做了响应头处理。
+## Production Image
+
+```text
+hkccr.ccs.tencentyun.com/plugins/webgl-preview:develop
+```
+
+Unity WebGL `.gz` assets require correct `Content-Encoding` and
+`Content-Type` headers. The Express service handles `.data.gz`,
+`.framework.js.gz`, and `.wasm.gz` responses before serving static files.
