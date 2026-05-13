@@ -52,13 +52,12 @@
       }
 
       var buildUrl = "Build";
-      var buildVersion = Date.now().toString();
-      var loaderUrl = buildUrl + "/Web Preview.loader.js?v=" + buildVersion;
+      var loaderUrl = buildUrl + "/Web Preview.loader.js";
       var config = {
         arguments: [],
-        dataUrl: buildUrl + "/Web Preview.data.gz?v=" + buildVersion,
-        frameworkUrl: buildUrl + "/Web Preview.framework.js.gz?v=" + buildVersion,
-        codeUrl: buildUrl + "/Web Preview.wasm.gz?v=" + buildVersion,
+        dataUrl: buildUrl + "/Web Preview.data.gz",
+        frameworkUrl: buildUrl + "/Web Preview.framework.js.gz",
+        codeUrl: buildUrl + "/Web Preview.wasm.gz",
         streamingAssetsUrl: "StreamingAssets",
         companyName: "bujiaban.com",
         productName: "Web Preview",
