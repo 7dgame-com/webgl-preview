@@ -1,8 +1,8 @@
 # WebGL Preview
 
-Unity WebGL preview plugin for XRUGC. The service is a small
-`Node.js + Express + TypeScript` app that serves the packaged Unity WebGL
-runtime and exposes host-facing plugin discovery endpoints.
+Unity WebGL preview plugin for XRUGC. The plugin follows the static frontend
+shape used by `blockly` and `editor`: packaged browser assets are served by
+nginx in production, with a tiny Node dev server for local checks.
 
 ## Docs
 
@@ -51,5 +51,5 @@ hkccr.ccs.tencentyun.com/plugins/webgl-preview:develop
 ```
 
 Unity WebGL `.gz` assets require correct `Content-Encoding` and
-`Content-Type` headers. The Express service handles `.data.gz`,
-`.framework.js.gz`, and `.wasm.gz` responses before serving static files.
+`Content-Type` headers. The production nginx config handles `.data.gz`,
+`.framework.js.gz`, and `.wasm.gz` before serving static files.

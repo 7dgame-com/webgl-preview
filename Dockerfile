@@ -1,32 +1,16 @@
-ARG NODE_IMAGE=node:20-bookworm-slim
-
-FROM ${NODE_IMAGE} AS build
-WORKDIR /app
-
-COPY package.json package-lock.json tsconfig.json ./
-RUN npm ci
-
-COPY src ./src
-COPY public ./public
-RUN npm run build
-RUN npm prune --omit=dev
-
-FROM ${NODE_IMAGE} AS runtime
-WORKDIR /app
+FROM nginx:1.19.0-alpine AS prod-stage
 
 LABEL org.opencontainers.image.title="webgl-preview"
 LABEL org.opencontainers.image.description="Unity WebGL preview plugin for XRUGC"
 LABEL org.opencontainers.image.source="https://github.com/7dgame-com/webgl-preview"
 
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/public ./public
-COPY scripts ./scripts
-COPY package.json ./
+RUN rm -rf /usr/share/nginx/html/*
 
-ENV HOST=0.0.0.0
-ENV PORT=3006
+COPY public /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-EXPOSE 3006
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=10s CMD node -e "fetch('http://127.0.0.1:3006/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["node", "dist/index.js"]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --quiet --tries=1 --spider http://127.0.0.1/api/health || exit 1
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

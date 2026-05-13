@@ -6,13 +6,12 @@ const required = [
   '.dockerignore',
   '.env.example',
   '.github/workflows/webgl-preview-ci.yml',
+  'nginx.conf',
   'README-quickstart.md',
   'docs/STRUCTURE.md',
   'docs/INTEGRATION.md',
-  'src/common/response.ts',
-  'src/middleware/requestLogger.ts',
-  'src/middleware/unityStaticHeaders.ts',
-  'src/plugin/helpers.ts',
+  'public/plugin/manifest.json',
+  'scripts/dev-server.js',
 ];
 
 const missing = required.filter((item) => !fs.existsSync(path.join(root, item)));

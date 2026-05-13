@@ -3,12 +3,13 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
 const required = [
+  'nginx.conf',
   'public/embed.html',
+  'public/plugin/manifest.json',
   'public/Build/Web Preview.loader.js',
   'public/Build/Web Preview.data.gz',
   'public/Build/Web Preview.framework.js.gz',
   'public/Build/Web Preview.wasm.gz',
-  'src/plugin/manifest.json',
 ];
 
 const missing = required.filter((item) => !fs.existsSync(path.join(root, item)));
@@ -20,7 +21,7 @@ if (missing.length > 0) {
 }
 
 const manifest = JSON.parse(
-  fs.readFileSync(path.join(root, 'src/plugin/manifest.json'), 'utf8')
+  fs.readFileSync(path.join(root, 'public/plugin/manifest.json'), 'utf8')
 );
 
 if (manifest.id !== 'webgl-preview') {

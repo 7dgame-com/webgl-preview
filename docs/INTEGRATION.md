@@ -51,6 +51,9 @@ organization-level secrets granted to that repository:
 - `TENCENT_REGISTRY_USER`
 - `TENCENT_REGISTRY_PASSWORD`
 
+The container serves HTTP on port `80`, matching the `blockly` and `editor`
+frontend plugin images. Portainer/Traefik should route to container port `80`.
+
 ## Health Checks
 
 Use either endpoint:
@@ -72,4 +75,3 @@ Expected response shape:
   }
 }
 ```
-

@@ -4,16 +4,11 @@ services:
   webgl-preview:
     image: hkccr.ccs.tencentyun.com/plugins/webgl-preview:develop
     restart: always
-    environment:
-      NODE_ENV: production
-      PORT: 3006
-      HOST: 0.0.0.0
-      PLUGIN_ID: webgl-preview
     networks:
       - proxy
       - internal
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3006/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/api/health"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -25,7 +20,7 @@ services:
       - "traefik.http.routers.webgl-preview-plugins-xrugc-com-secure.middlewares=test-compress@file"
       - "traefik.http.routers.webgl-preview-plugins-xrugc-com-secure.tls=true"
       - "traefik.http.routers.webgl-preview-plugins-xrugc-com-secure.tls.certresolver=letsencrypt"
-      - "traefik.http.services.webgl-preview-plugins-xrugc-com.loadbalancer.server.port=3006"
+      - "traefik.http.services.webgl-preview-plugins-xrugc-com.loadbalancer.server.port=80"
 
 networks:
   proxy:

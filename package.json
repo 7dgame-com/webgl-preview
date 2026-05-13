@@ -1,36 +1,22 @@
 {
   "name": "webgl-preview",
   "version": "1.0.0",
+  "private": true,
   "description": "Unity WebGL preview plugin for XRUGC",
-  "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "start:prod": "node dist/index.js",
-    "clean": "rm -rf dist",
-    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "lint": "npm run type-check",
-    "type-check": "tsc --noEmit",
+    "start": "node scripts/dev-server.js",
+    "dev": "node scripts/dev-server.js",
+    "build": "npm run self-check",
+    "preview": "node scripts/dev-server.js",
+    "lint": "npm run self-check && npm run structure-check",
     "self-check": "node scripts/self-check.js",
     "structure-check": "node scripts/structure-check.js",
     "test:self-check": "npm run self-check",
-    "test:docker": "docker compose run --rm --no-deps webgl-preview node scripts/self-check.js",
+    "test:docker": "docker compose run --rm --no-deps webgl-preview wget -qO- http://127.0.0.1/api/health",
     "docker:build": "docker build -t webgl-preview:local .",
-    "test": "npm run type-check && npm run self-check && npm run structure-check"
+    "test": "npm run self-check && npm run structure-check"
   },
   "engines": {
     "node": ">=20.0.0"
-  },
-  "dependencies": {
-    "cors": "^2.8.5",
-    "dotenv": "^17.3.1",
-    "express": "^4.21.2"
-  },
-  "devDependencies": {
-    "@types/cors": "^2.8.17",
-    "@types/express": "^5.0.1",
-    "@types/node": "^22.13.10",
-    "ts-node-dev": "^2.0.0",
-    "typescript": "^5.8.2"
   }
 }
