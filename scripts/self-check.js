@@ -34,4 +34,17 @@ if (manifest.entry?.frontend !== '/embed.html') {
   process.exit(1);
 }
 
+const nginxConfig = fs.readFileSync(path.join(root, 'nginx.conf'), 'utf8');
+for (const expectedSnippet of [
+  'location = /__xrugc_proxy__',
+  'proxy_pass $arg_url',
+  'location ~* \\.wasm\\.gz$',
+  'Content-Encoding gzip',
+]) {
+  if (!nginxConfig.includes(expectedSnippet)) {
+    console.error(`Missing nginx config snippet: ${expectedSnippet}`);
+    process.exit(1);
+  }
+}
+
 console.log('webgl-preview self-check passed');
