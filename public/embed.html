@@ -357,7 +357,8 @@
             host = "127.0.0.1:8080";
           }
 
-          return "http://" + host;
+          var protocol = window.location.protocol === "https:" ? "https:" : "http:";
+          return protocol + "//" + host;
         }
 
         function forwardSceneJson(json, options) {
