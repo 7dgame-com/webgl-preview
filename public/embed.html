@@ -176,11 +176,6 @@
       })();
 
       function createWebPreviewBridge(unityInstance) {
-        var sceneRetryTimer = 0;
-        var sceneRetryJson = "";
-        var sceneRetryAttempts = 0;
-        var sceneRetryMaxAttempts = 20;
-
         function toSceneJson(payload) {
           if (typeof payload === "string") {
             logScenePayloadSummary(parseScenePayloadForSummary(payload));
@@ -382,42 +377,9 @@
           }
         }
 
-        function stopSceneRetry() {
-          if (sceneRetryTimer) {
-            window.clearInterval(sceneRetryTimer);
-            sceneRetryTimer = 0;
-          }
-        }
-
-        function shouldRetryPayload(payload) {
-          return !(payload && payload.source === "webgl-template");
-        }
-
-        function startSceneRetry(json) {
-          stopSceneRetry();
-
-          sceneRetryJson = json;
-          sceneRetryAttempts = 0;
-          sceneRetryTimer = window.setInterval(function() {
-            if (!sceneRetryJson || sceneRetryAttempts >= sceneRetryMaxAttempts) {
-              stopSceneRetry();
-              return;
-            }
-
-            sceneRetryAttempts += 1;
-            forwardSceneJson(sceneRetryJson, { quiet: true });
-          }, 1000);
-        }
-
-        function sendSceneJson(payload, options) {
+        function sendSceneJson(payload) {
           var json = toSceneJson(payload);
-          var retry = shouldRetryPayload(payload) && !(options && options.retry === false);
-
           forwardSceneJson(json);
-
-          if (retry) {
-            startSceneRetry(json);
-          }
         }
 
         function getMessagePayload(data) {
