@@ -5,6 +5,7 @@ const root = path.resolve(__dirname, '..');
 const required = [
   'nginx.conf',
   'public/embed.html',
+  'public/sw.js',
   'public/plugin/manifest.json',
   'public/Build/Web Preview.loader.js',
   'public/Build/Web Preview.data.gz',
@@ -62,6 +63,7 @@ for (const expectedSnippet of [
   'proxy_pass $arg_url',
   'location ~* \\.wasm\\.gz$',
   'Content-Encoding gzip',
+  'location = /sw.js',
 ]) {
   if (!nginxConfig.includes(expectedSnippet)) {
     console.error(`Missing nginx config snippet: ${expectedSnippet}`);

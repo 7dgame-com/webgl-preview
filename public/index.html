@@ -5,7 +5,7 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Unity Web Player | Web Preview</title>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
-    <link rel="stylesheet" href="TemplateData/style.css?v=web-preview-fill">
+    <link rel="stylesheet" href="TemplateData/style.css?v=2026.05.14.2">
   </head>
   <body>
     <div id="unity-container" class="unity-desktop">
@@ -51,13 +51,38 @@
         updateBannerVisibility();
       }
 
+      var webPreviewBuildCacheVersion = "2026.05.14.2";
       var buildUrl = "Build";
-      var loaderUrl = buildUrl + "/Web Preview.loader.js";
+      function withBuildCacheVersion(url) {
+        var nextUrl = new URL(url, window.location.href);
+        nextUrl.searchParams.set("v", webPreviewBuildCacheVersion);
+        return nextUrl.toString();
+      }
+
+      function warmWebPreviewCache() {
+        if (!("serviceWorker" in navigator)) {
+          return;
+        }
+
+        navigator.serviceWorker.register("/sw.js").then(function() {
+          return navigator.serviceWorker.ready;
+        }).then(function(registration) {
+          if (registration.active) {
+            registration.active.postMessage({ type: "warm-webgl-preview-cache" });
+          }
+        }).catch(function(error) {
+          console.warn("[WebPreview] Service worker cache registration failed.", error);
+        });
+      }
+
+      warmWebPreviewCache();
+
+      var loaderUrl = withBuildCacheVersion(buildUrl + "/Web Preview.loader.js");
       var config = {
         arguments: [],
-        dataUrl: buildUrl + "/Web Preview.data.gz",
-        frameworkUrl: buildUrl + "/Web Preview.framework.js.gz",
-        codeUrl: buildUrl + "/Web Preview.wasm.gz",
+        dataUrl: withBuildCacheVersion(buildUrl + "/Web Preview.data.gz"),
+        frameworkUrl: withBuildCacheVersion(buildUrl + "/Web Preview.framework.js.gz"),
+        codeUrl: withBuildCacheVersion(buildUrl + "/Web Preview.wasm.gz"),
         streamingAssetsUrl: "StreamingAssets",
         companyName: "bujiaban.com",
         productName: "Web Preview",
