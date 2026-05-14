@@ -51,7 +51,7 @@
         updateBannerVisibility();
       }
 
-      var webPreviewBuildCacheVersion = "2026.05.14.3";
+      var webPreviewBuildCacheVersion = "2026.05.14.4";
       var buildUrl = "Build";
       function withBuildCacheVersion(url) {
         var nextUrl = new URL(url, window.location.href);
@@ -60,6 +60,10 @@
       }
 
       function warmWebPreviewCache() {
+        if (["localhost", "127.0.0.1", "::1"].indexOf(window.location.hostname) !== -1) {
+          return;
+        }
+
         if (!("serviceWorker" in navigator)) {
           return;
         }
@@ -79,12 +83,12 @@
 
       warmWebPreviewCache();
 
-      var loaderUrl = withBuildCacheVersion(buildUrl + "/d22dd468b8c4f08254bc81436c229502.loader.js");
+      var loaderUrl = withBuildCacheVersion(buildUrl + "/public.loader.js");
       var config = {
         arguments: [],
-        dataUrl: withBuildCacheVersion(buildUrl + "/5502fee942c2accc1885ee92a4887d49.data.br"),
-        frameworkUrl: withBuildCacheVersion(buildUrl + "/2dcf828afdd731d2ba1d87dda65aae60.framework.js.br"),
-        codeUrl: withBuildCacheVersion(buildUrl + "/abc429029eca16512c5ae770b25b0f27.wasm.br"),
+        dataUrl: withBuildCacheVersion(buildUrl + "/public.data.gz"),
+        frameworkUrl: withBuildCacheVersion(buildUrl + "/public.framework.js.gz"),
+        codeUrl: withBuildCacheVersion(buildUrl + "/public.wasm.gz"),
         streamingAssetsUrl: "StreamingAssets",
         companyName: "bujiaban.com",
         productName: "Web Preview",

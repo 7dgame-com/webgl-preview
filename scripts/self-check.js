@@ -28,11 +28,18 @@ const findBuildFile = (pattern, label) => {
   return path.join('public/Build', fileName);
 };
 
-const loaderFile = findBuildFile(/^[a-f0-9]{32}\.loader\.js$/, 'hashed loader.js');
+const buildName = '(?:[a-f0-9]{32}|public)';
+const loaderFile = findBuildFile(
+  new RegExp(`^${buildName}\\.loader\\.js$`),
+  'Unity loader.js'
+);
 const compressedBuildFiles = [
-  findBuildFile(/^[a-f0-9]{32}\.data\.br$/, 'hashed data.br'),
-  findBuildFile(/^[a-f0-9]{32}\.framework\.js\.br$/, 'hashed framework.js.br'),
-  findBuildFile(/^[a-f0-9]{32}\.wasm\.br$/, 'hashed wasm.br'),
+  findBuildFile(new RegExp(`^${buildName}\\.data\\.(?:br|gz)$`), 'Unity data asset'),
+  findBuildFile(
+    new RegExp(`^${buildName}\\.framework\\.js\\.(?:br|gz)$`),
+    'Unity framework asset'
+  ),
+  findBuildFile(new RegExp(`^${buildName}\\.wasm\\.(?:br|gz)$`), 'Unity wasm asset'),
 ];
 
 if (fs.statSync(path.join(root, loaderFile)).size < 1024) {
