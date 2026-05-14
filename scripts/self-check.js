@@ -7,10 +7,6 @@ const required = [
   'public/embed.html',
   'public/sw.js',
   'public/plugin/manifest.json',
-  'public/Build/Web Preview.loader.js',
-  'public/Build/Web Preview.data.gz',
-  'public/Build/Web Preview.framework.js.gz',
-  'public/Build/Web Preview.wasm.gz',
 ];
 
 const missing = required.filter((item) => !fs.existsSync(path.join(root, item)));
@@ -21,13 +17,30 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
-const lfsManagedBuildFiles = [
-  'public/Build/Web Preview.data.gz',
-  'public/Build/Web Preview.framework.js.gz',
-  'public/Build/Web Preview.wasm.gz',
+const buildDir = path.join(root, 'public/Build');
+const buildFiles = fs.existsSync(buildDir) ? fs.readdirSync(buildDir) : [];
+const findBuildFile = (pattern, label) => {
+  const fileName = buildFiles.find((file) => pattern.test(file));
+  if (!fileName) {
+    console.error(`Missing WebGL build file: ${label}`);
+    process.exit(1);
+  }
+  return path.join('public/Build', fileName);
+};
+
+const loaderFile = findBuildFile(/^[a-f0-9]{32}\.loader\.js$/, 'hashed loader.js');
+const compressedBuildFiles = [
+  findBuildFile(/^[a-f0-9]{32}\.data\.br$/, 'hashed data.br'),
+  findBuildFile(/^[a-f0-9]{32}\.framework\.js\.br$/, 'hashed framework.js.br'),
+  findBuildFile(/^[a-f0-9]{32}\.wasm\.br$/, 'hashed wasm.br'),
 ];
 
-for (const file of lfsManagedBuildFiles) {
+if (fs.statSync(path.join(root, loaderFile)).size < 1024) {
+  console.error(`Build loader is unexpectedly small: ${loaderFile}`);
+  process.exit(1);
+}
+
+for (const file of compressedBuildFiles) {
   const absolutePath = path.join(root, file);
   const stat = fs.statSync(absolutePath);
   const head = fs.readFileSync(absolutePath, 'utf8').slice(0, 128);
@@ -61,8 +74,8 @@ const nginxConfig = fs.readFileSync(path.join(root, 'nginx.conf'), 'utf8');
 for (const expectedSnippet of [
   'location = /__xrugc_proxy__',
   'proxy_pass $arg_url',
-  'location ~* \\.wasm\\.gz$',
-  'Content-Encoding gzip',
+  'location ~* \\.wasm\\.br$',
+  'Content-Encoding br',
   'location = /sw.js',
 ]) {
   if (!nginxConfig.includes(expectedSnippet)) {

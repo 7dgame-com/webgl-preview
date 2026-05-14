@@ -1,45 +1,68 @@
-version: "3.7"
-
 services:
-  webgl-preview:
-    image: ${WEBGL_PREVIEW_IMAGE:-hkccr.ccs.tencentyun.com/plugins/webgl-preview:main}
-    restart: always
+  webgl-preview-d:
+    image: ${WEBGL_PREVIEW_D_IMAGE:-hkccr.ccs.tencentyun.com/plugins/webgl-preview:develop}
     networks:
       - proxy
       - internal
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.webgl-preview-d.rule=Host(`webgl-preview.d.plugins.xrugc.com`)
+      - traefik.http.routers.webgl-preview-d.entrypoints=websecure
+      - traefik.http.routers.webgl-preview-d.middlewares=test-compress@file
+      - traefik.http.routers.webgl-preview-d.tls=true
+      - traefik.http.routers.webgl-preview-d.tls.certresolver=letsencrypt
+      - traefik.http.routers.webgl-preview-d.service=webgl-preview-d
+      - traefik.http.routers.webgl-preview-d-main.rule=Host(`${WEBGL_PREVIEW_D_MAIN_HOST:-d.dev.xrugc.com}`) && PathPrefix(`/webgl-preview`)
+      - traefik.http.routers.webgl-preview-d-main.entrypoints=websecure
+      - traefik.http.routers.webgl-preview-d-main.tls=true
+      - traefik.http.routers.webgl-preview-d-main.tls.certresolver=letsencrypt
+      - traefik.http.routers.webgl-preview-d-main.priority=200
+      - traefik.http.routers.webgl-preview-d-main.middlewares=webgl-preview-d-strip,test-compress@file
+      - traefik.http.routers.webgl-preview-d-main.service=webgl-preview-d
+      - traefik.http.middlewares.webgl-preview-d-strip.stripprefix.prefixes=/webgl-preview
+      - traefik.http.services.webgl-preview-d.loadbalancer.server.port=80
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:80/api/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/api/health"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
+    restart: unless-stopped
+
+  webgl-preview:
+    image: ${WEBGL_PREVIEW_IMAGE:-hkccr.ccs.tencentyun.com/plugins/webgl-preview:main}
+    networks:
+      - proxy
+      - internal
     labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=proxy"
-      - "traefik.http.routers.webgl-preview-plugins-xrugc-com-secure.entrypoints=websecure"
-      - "traefik.http.routers.webgl-preview-plugins-xrugc-com-secure.rule=Host(`webgl-preview.plugins.xrugc.com`)"
-      - "traefik.http.routers.webgl-preview-plugins-xrugc-com-secure.tls=true"
-      - "traefik.http.routers.webgl-preview-plugins-xrugc-com-secure.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.webgl-preview-d-plugins-xrugc-com-secure.entrypoints=websecure"
-      - "traefik.http.routers.webgl-preview-d-plugins-xrugc-com-secure.rule=Host(`webgl-preview.d.plugins.xrugc.com`)"
-      - "traefik.http.routers.webgl-preview-d-plugins-xrugc-com-secure.tls=true"
-      - "traefik.http.routers.webgl-preview-d-plugins-xrugc-com-secure.tls.certresolver=letsencrypt"
-      - "traefik.http.services.webgl-preview-plugins-xrugc-com.loadbalancer.server.port=80"
-    deploy:
-      labels:
-        - "traefik.enable=true"
-        - "traefik.docker.network=proxy"
-        - "traefik.http.routers.webgl-preview-plugins-xrugc-com-secure.entrypoints=websecure"
-        - "traefik.http.routers.webgl-preview-plugins-xrugc-com-secure.rule=Host(`webgl-preview.plugins.xrugc.com`)"
-        - "traefik.http.routers.webgl-preview-plugins-xrugc-com-secure.tls=true"
-        - "traefik.http.routers.webgl-preview-plugins-xrugc-com-secure.tls.certresolver=letsencrypt"
-        - "traefik.http.routers.webgl-preview-d-plugins-xrugc-com-secure.entrypoints=websecure"
-        - "traefik.http.routers.webgl-preview-d-plugins-xrugc-com-secure.rule=Host(`webgl-preview.d.plugins.xrugc.com`)"
-        - "traefik.http.routers.webgl-preview-d-plugins-xrugc-com-secure.tls=true"
-        - "traefik.http.routers.webgl-preview-d-plugins-xrugc-com-secure.tls.certresolver=letsencrypt"
-        - "traefik.http.services.webgl-preview-plugins-xrugc-com.loadbalancer.server.port=80"
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.webgl-preview.rule=Host(`webgl-preview.plugins.xrugc.com`)
+      - traefik.http.routers.webgl-preview.entrypoints=websecure
+      - traefik.http.routers.webgl-preview.middlewares=test-compress@file
+      - traefik.http.routers.webgl-preview.tls=true
+      - traefik.http.routers.webgl-preview.tls.certresolver=letsencrypt
+      - traefik.http.routers.webgl-preview.service=webgl-preview
+      - traefik.http.routers.webgl-preview-main.rule=Host(`${WEBGL_PREVIEW_MAIN_HOST:-xrugc.com}`) && PathPrefix(`/webgl-preview`)
+      - traefik.http.routers.webgl-preview-main.entrypoints=websecure
+      - traefik.http.routers.webgl-preview-main.tls=true
+      - traefik.http.routers.webgl-preview-main.tls.certresolver=letsencrypt
+      - traefik.http.routers.webgl-preview-main.priority=200
+      - traefik.http.routers.webgl-preview-main.middlewares=webgl-preview-strip,test-compress@file
+      - traefik.http.routers.webgl-preview-main.service=webgl-preview
+      - traefik.http.middlewares.webgl-preview-strip.stripprefix.prefixes=/webgl-preview
+      - traefik.http.services.webgl-preview.loadbalancer.server.port=80
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
 
 networks:
   proxy:
     external: true
   internal:
+    driver: bridge

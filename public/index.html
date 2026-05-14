@@ -5,7 +5,7 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Unity Web Player | Web Preview</title>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
-    <link rel="stylesheet" href="TemplateData/style.css?v=2026.05.14.2">
+    <link rel="stylesheet" href="TemplateData/style.css?v=web-preview-fill">
   </head>
   <body>
     <div id="unity-container" class="unity-desktop">
@@ -51,38 +51,14 @@
         updateBannerVisibility();
       }
 
-      var webPreviewBuildCacheVersion = "2026.05.14.2";
       var buildUrl = "Build";
-      function withBuildCacheVersion(url) {
-        var nextUrl = new URL(url, window.location.href);
-        nextUrl.searchParams.set("v", webPreviewBuildCacheVersion);
-        return nextUrl.toString();
-      }
-
-      function warmWebPreviewCache() {
-        if (!("serviceWorker" in navigator)) {
-          return;
-        }
-
-        navigator.serviceWorker.register("/sw.js").then(function() {
-          return navigator.serviceWorker.ready;
-        }).then(function(registration) {
-          if (registration.active) {
-            registration.active.postMessage({ type: "warm-webgl-preview-cache" });
-          }
-        }).catch(function(error) {
-          console.warn("[WebPreview] Service worker cache registration failed.", error);
-        });
-      }
-
-      warmWebPreviewCache();
-
-      var loaderUrl = withBuildCacheVersion(buildUrl + "/Web Preview.loader.js");
+      var buildVersion = Date.now().toString();
+      var loaderUrl = buildUrl + "/d22dd468b8c4f08254bc81436c229502.loader.js?v=" + buildVersion;
       var config = {
         arguments: [],
-        dataUrl: withBuildCacheVersion(buildUrl + "/Web Preview.data.gz"),
-        frameworkUrl: withBuildCacheVersion(buildUrl + "/Web Preview.framework.js.gz"),
-        codeUrl: withBuildCacheVersion(buildUrl + "/Web Preview.wasm.gz"),
+        dataUrl: buildUrl + "/5502fee942c2accc1885ee92a4887d49.data.br?v=" + buildVersion,
+        frameworkUrl: buildUrl + "/2dcf828afdd731d2ba1d87dda65aae60.framework.js.br?v=" + buildVersion,
+        codeUrl: buildUrl + "/abc429029eca16512c5ae770b25b0f27.wasm.br?v=" + buildVersion,
         streamingAssetsUrl: "StreamingAssets",
         companyName: "bujiaban.com",
         productName: "Web Preview",

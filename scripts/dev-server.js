@@ -14,6 +14,8 @@ const contentTypes = new Map([
   ['.json', 'application/json; charset=utf-8'],
   ['.png', 'image/png'],
   ['.wasm', 'application/wasm'],
+  ['.br', 'application/octet-stream'],
+  ['.gz', 'application/octet-stream'],
 ]);
 
 const proxyRequestHeaders = [
@@ -194,7 +196,16 @@ const server = http.createServer((req, res) => {
     'Access-Control-Allow-Origin': '*',
   };
 
-  if (target.endsWith('.wasm.gz')) {
+  if (target.endsWith('.wasm.br')) {
+    headers['Content-Type'] = 'application/wasm';
+    headers['Content-Encoding'] = 'br';
+  } else if (target.endsWith('.js.br')) {
+    headers['Content-Type'] = 'application/javascript';
+    headers['Content-Encoding'] = 'br';
+  } else if (target.endsWith('.data.br')) {
+    headers['Content-Type'] = 'application/octet-stream';
+    headers['Content-Encoding'] = 'br';
+  } else if (target.endsWith('.wasm.gz')) {
     headers['Content-Type'] = 'application/wasm';
     headers['Content-Encoding'] = 'gzip';
   } else if (target.endsWith('.js.gz')) {
