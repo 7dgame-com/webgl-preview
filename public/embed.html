@@ -470,24 +470,6 @@
           }
         }
 
-        function setUnityPaused(paused) {
-          var module = unityInstance && unityInstance.Module;
-          try {
-            if (module) {
-              if (paused && typeof module.pauseMainLoop === "function") {
-                module.pauseMainLoop();
-                return;
-              }
-              if (!paused && typeof module.resumeMainLoop === "function") {
-                module.resumeMainLoop();
-                return;
-              }
-            }
-          } catch (error) {
-            console.warn("[WebPreview] Failed to toggle Unity pause.", error);
-          }
-        }
-
         function sendSceneJson(payload) {
           var json = toSceneJson(payload);
           forwardSceneJson(json);
@@ -554,14 +536,6 @@
 
           if (data.type === "load-scene-json" || data.type === "xrugc-load-scene-json") {
             sendSceneJson(getMessagePayload(data));
-          }
-
-          if (data.type === "pause-unity-preview") {
-            setUnityPaused(true);
-          }
-
-          if (data.type === "resume-unity-preview") {
-            setUnityPaused(false);
           }
 
           if (data.type === "unity-web-preview-ping") {

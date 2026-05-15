@@ -20,7 +20,6 @@ const state = {
   pendingRun: false,
   stopped: false,
   running: false,
-  paused: false,
   busy: false,
 };
 
@@ -29,7 +28,6 @@ const elements = {
   sceneField: document.querySelector("[data-scene-field]"),
   sceneId: document.querySelector("[data-scene-id]"),
   run: document.querySelector("[data-run]"),
-  pause: document.querySelector("[data-pause]"),
   stop: document.querySelector("[data-stop]"),
   reload: document.querySelector("[data-reload]"),
   tokenInput: document.querySelector("[data-token-input]"),
@@ -63,14 +61,11 @@ function renderControls() {
   const isActive = state.busy || state.running;
   elements.sceneField.hidden = isActive;
   elements.run.hidden = isActive;
-  elements.pause.hidden = !isActive;
   elements.stop.hidden = !isActive;
   elements.reload.hidden = !isActive;
   elements.run.disabled = state.busy;
-  elements.pause.disabled = state.busy || state.stopped;
   elements.stop.disabled = state.busy && state.stopped;
   elements.reload.disabled = state.busy;
-  elements.pause.textContent = state.paused ? "继续" : "暂停";
 }
 
 function setControlsBusy(isBusy) {
@@ -612,7 +607,6 @@ async function runScene() {
     state.stopped = false;
   }
   state.running = true;
-  state.paused = false;
   setControlsBusy(true);
   setStatus("读取场景中", "busy");
   log(`开始读取场景 ${sceneId}。`);
@@ -631,7 +625,6 @@ async function runScene() {
     sendPayloadToUnity(payload);
   } catch (error) {
     state.running = false;
-    state.paused = false;
     setStatus("运行失败", "error");
     log(error instanceof Error ? error.message : String(error));
   } finally {
@@ -651,7 +644,6 @@ function loadUnityFrame({ clearPayload = false, autoRun = false } = {}) {
   if (clearPayload) {
     state.payload = null;
   }
-  state.paused = false;
   if (autoRun) {
     state.pendingRun = true;
   }
@@ -663,27 +655,10 @@ function stopScene() {
   state.pendingRun = false;
   state.frameReady = false;
   state.running = false;
-  state.paused = false;
   elements.frame.src = "about:blank";
   setStatus("已停止", "");
   renderControls();
   log("已停止。");
-}
-
-function pauseScene() {
-  if (!state.running || state.busy || state.stopped) {
-    return;
-  }
-  state.paused = !state.paused;
-  elements.frame.contentWindow?.postMessage(
-    {
-      type: state.paused ? "pause-unity-preview" : "resume-unity-preview",
-    },
-    "*"
-  );
-  setStatus(state.paused ? "已暂停" : "运行中", state.paused ? "busy" : "ready");
-  renderControls();
-  log(state.paused ? "已暂停。" : "已继续。");
 }
 
 function rerunScene() {
@@ -726,7 +701,6 @@ function setupFrame() {
 
 function setupControls() {
   elements.run.addEventListener("click", runScene);
-  elements.pause.addEventListener("click", pauseScene);
   elements.stop.addEventListener("click", stopScene);
   elements.reload.addEventListener("click", rerunScene);
   elements.saveToken.addEventListener("click", () => {
