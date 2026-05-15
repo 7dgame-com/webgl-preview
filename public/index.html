@@ -7,7 +7,7 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <title>WebGL 场景运行器</title>
-    <link rel="stylesheet" href="./styles/plugin-runner.css?v=2026.05.15.2" />
+    <link rel="stylesheet" href="./styles/plugin-runner.css?v=2026.05.15.4" />
   </head>
   <body>
     <main class="app-shell">
@@ -52,7 +52,7 @@
             <h2 class="panel-title">接口</h2>
             <dl class="meta-list">
               <div class="meta-row">
-                <span>API</span>
+                <span>数据源</span>
                 <span data-api-base>检测中</span>
               </div>
               <div class="meta-row">
@@ -75,9 +75,9 @@
               保存令牌
             </button>
             <p class="hint">
-              在主系统插件页打开时会自动使用宿主登录态。独立打开时可通过
-              <code>?api=https://d.dev.xrugc.com/api</code> 指定接口，也可通过
-              <code>?token=...</code> 临时传入令牌。
+              默认通过 snapshot 公开接口读取场景。需要调试旧接口时可通过
+              <code>?source=legacy&amp;api=https://d.dev.xrugc.com/api</code>
+              切换，并可用 <code>?token=...</code> 临时传入令牌。
             </p>
           </section>
 
@@ -120,6 +120,6 @@
       </section>
     </main>
 
-    <script type="module" src="./modules/plugin-runner.js?v=2026.05.15.2"></script>
+    <script type="module" src="./modules/plugin-runner.js?v=2026.05.15.4"></script>
   </body>
 </html>

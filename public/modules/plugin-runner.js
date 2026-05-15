@@ -1,6 +1,9 @@
 const PLUGIN_ID = "webgl-preview";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
+const SNAPSHOT_EXPAND =
+  "id,name,description,data,metas,resources,code,uuid,image,managers,verse_id";
+const DEFAULT_SNAPSHOT_URL = "https://a2.bujiaban.com/v1/server/snapshot";
 const LEGACY_COS_HOST =
   "7dgame-public-1251022382.cos.ap-nanjing.myqcloud.com";
 const CDN_HOST = "data.7dgame.com";
@@ -79,12 +82,42 @@ function resolveParentApiBase() {
 function resolveApiBase() {
   const query = readQuery();
   return normalizeApiBase(
+    state.config.snapshotUrl ||
+      state.config.snapshotApi ||
+      query.get("snapshot") ||
+      query.get("snapshotApi") ||
+      (query.get("source") === "legacy" || query.get("legacy") === "1"
+        ? ""
+        : DEFAULT_SNAPSHOT_URL) ||
+      state.config.apiBase ||
+      state.config.api ||
+      query.get("api") ||
+      resolveParentApiBase() ||
+      "https://d.dev.xrugc.com/api"
+  );
+}
+
+function resolveLegacyApiBase() {
+  const query = readQuery();
+  return normalizeApiBase(
     state.config.apiBase ||
       state.config.api ||
       query.get("api") ||
       resolveParentApiBase() ||
       "https://d.dev.xrugc.com/api"
   );
+}
+
+function shouldUseLegacyVerseApi() {
+  const query = readQuery();
+  return query.get("source") === "legacy" || query.get("legacy") === "1";
+}
+
+function resolveSnapshotUrl(sceneId) {
+  const url = new URL(resolveApiBase(), window.location.href);
+  url.searchParams.set("expand", SNAPSHOT_EXPAND);
+  url.searchParams.set("verse_id", String(sceneId));
+  return url.toString();
 }
 
 function readStoredToken() {
@@ -402,10 +435,7 @@ function unwrapApiData(json) {
   return json;
 }
 
-async function requestVerse(sceneId, cl) {
-  const url = new URL(`${resolveApiBase()}/v1/verses/${sceneId}`);
-  url.searchParams.set("expand", UNITY_PREVIEW_VERSE_EXPAND);
-  url.searchParams.set("cl", cl);
+async function requestJsonThroughProxy(url) {
   const proxyUrl = new URL("/__xrugc_proxy__", window.location.origin);
   proxyUrl.searchParams.set("url", url.toString());
 
@@ -435,6 +465,17 @@ async function requestVerse(sceneId, cl) {
   return unwrapApiData(await response.json());
 }
 
+async function requestSnapshot(sceneId) {
+  return requestJsonThroughProxy(resolveSnapshotUrl(sceneId));
+}
+
+async function requestLegacyVerse(sceneId, cl) {
+  const url = new URL(`${resolveLegacyApiBase()}/v1/verses/${sceneId}`);
+  url.searchParams.set("expand", UNITY_PREVIEW_VERSE_EXPAND);
+  url.searchParams.set("cl", cl);
+  return requestJsonThroughProxy(url);
+}
+
 function buildPayload(sceneId, runtimeData, scriptRuntimeData) {
   const luaCode = readUnityPreviewVerseCode(runtimeData, "lua");
   const jsCode = readUnityPreviewVerseCode(scriptRuntimeData, "javascript");
@@ -447,7 +488,8 @@ function buildPayload(sceneId, runtimeData, scriptRuntimeData) {
     source: "webgl-preview-plugin",
     sceneType: "verse",
     scene: {
-      id: runtimeData?.id ?? sceneId,
+      id: runtimeData?.verse_id ?? runtimeData?.id ?? sceneId,
+      snapshotId: runtimeData?.verse_id ? runtimeData?.id : null,
       uuid: runtimeData?.uuid ?? null,
       name: runtimeData?.name ?? "",
       description: runtimeData?.description ?? "",
@@ -514,10 +556,12 @@ async function runScene() {
   log(`开始读取场景 ${sceneId}。`);
 
   try {
-    const [runtimeData, scriptRuntimeData] = await Promise.all([
-      requestVerse(sceneId, "lua"),
-      requestVerse(sceneId, "js"),
-    ]);
+    const [runtimeData, scriptRuntimeData] = shouldUseLegacyVerseApi()
+      ? await Promise.all([
+          requestLegacyVerse(sceneId, "lua"),
+          requestLegacyVerse(sceneId, "js"),
+        ])
+      : [await requestSnapshot(sceneId), {}];
     const payload = buildPayload(sceneId, runtimeData, scriptRuntimeData);
     state.payload = payload;
     updateSummary(payload);
