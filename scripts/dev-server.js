@@ -21,6 +21,8 @@ const contentTypes = new Map([
 const proxyRequestHeaders = [
   'accept',
   'accept-language',
+  'authorization',
+  'content-type',
   'range',
   'if-range',
   'user-agent',
@@ -145,11 +147,11 @@ async function proxyRemoteAsset(req, res, proxyUrl) {
 }
 
 function resolveFile(urlPath) {
-  const requested = urlPath === '/' ? '/embed.html' : urlPath;
+  const requested = urlPath === '/' ? '/index.html' : urlPath;
   const target = path.resolve(root, `.${decodeURIComponent(requested)}`);
   if (!target.startsWith(root)) return null;
   if (fs.existsSync(target) && fs.statSync(target).isFile()) return target;
-  return path.join(root, 'embed.html');
+  return path.join(root, 'index.html');
 }
 
 const server = http.createServer((req, res) => {

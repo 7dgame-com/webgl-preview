@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "type": "frontend",
   "entry": {
-    "frontend": "/embed.html"
+    "frontend": "/index.html",
+    "runner": "/embed.html"
   },
   "permissions": [],
   "scopes": [
@@ -12,16 +13,19 @@
   ],
   "ui": {
     "mode": "iframe",
-    "title": "WebGL Preview",
-    "description": "Open the packaged Unity WebGL preview in the XRUGC plugin host."
+    "title": "WebGL Scene Runner",
+    "description": "Enter a scene id and run the corresponding XRUGC scene in Unity WebGL."
   },
   "inputSchema": {
     "type": "object",
-    "properties": {}
+    "properties": {
+      "sceneId": {
+        "type": "number"
+      }
+    }
   },
   "outputSchema": {
     "type": "object",
     "properties": {}
   }
 }
-

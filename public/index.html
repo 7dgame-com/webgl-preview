@@ -1,530 +1,106 @@
-<!DOCTYPE html>
-<html lang="en-us">
+<!doctype html>
+<html lang="zh-CN">
   <head>
-    <meta charset="utf-8">
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Unity Web Player | Web Preview</title>
-    <link rel="shortcut icon" href="TemplateData/favicon.ico">
-    <link rel="stylesheet" href="TemplateData/style.css?v=web-preview-fill">
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>WebGL 场景运行器</title>
+    <link rel="stylesheet" href="./styles/plugin-runner.css?v=2026.05.15.1" />
   </head>
   <body>
-    <div id="unity-container" class="unity-desktop">
-      <canvas id="unity-canvas" width=960 height=600 tabindex="-1"></canvas>
-      <div id="unity-loading-bar">
-        <div id="unity-logo"></div>
-        <div id="unity-progress-bar-empty">
-          <div id="unity-progress-bar-full"></div>
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <h1 class="title">WebGL 场景运行器</h1>
+          <p class="subtitle">输入场景号后读取平台数据并在 Unity WebGL 中运行</p>
         </div>
-      </div>
-      <div id="unity-warning"> </div>
-      <div id="unity-footer">
-        <div id="unity-logo-title-footer"></div>
-        <div id="unity-fullscreen-button"></div>
-        <div id="unity-build-title">Web Preview</div>
-      </div>
-    </div>
-    <script>
-      var canvas = document.querySelector("#unity-canvas");
-
-      // Shows a temporary message banner/ribbon for a few seconds, or
-      // a permanent error message on top of the canvas if type=='error'.
-      // If type=='warning', a yellow highlight color is used.
-      // Modify or remove this function to customize the visually presented
-      // way that non-critical warnings and error messages are presented to the
-      // user.
-      function unityShowBanner(msg, type) {
-        var warningBanner = document.querySelector("#unity-warning");
-        function updateBannerVisibility() {
-          warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
-        }
-        var div = document.createElement('div');
-        div.innerHTML = msg;
-        warningBanner.appendChild(div);
-        if (type == 'error') div.style = 'background: red; padding: 10px;';
-        else {
-          if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
-          setTimeout(function() {
-            warningBanner.removeChild(div);
-            updateBannerVisibility();
-          }, 5000);
-        }
-        updateBannerVisibility();
-      }
-
-      var buildUrl = "Build";
-      var buildVersion = Date.now().toString();
-      var loaderUrl = buildUrl + "/public.loader.js?v=" + buildVersion;
-      var config = {
-        arguments: [],
-        dataUrl: buildUrl + "/public.data.gz?v=" + buildVersion,
-        frameworkUrl: buildUrl + "/public.framework.js.gz?v=" + buildVersion,
-        codeUrl: buildUrl + "/public.wasm.gz?v=" + buildVersion,
-        streamingAssetsUrl: "StreamingAssets",
-        companyName: "bujiaban.com",
-        productName: "Web Preview",
-        productVersion: "1.0.0",
-        showBanner: unityShowBanner,
-        // errorHandler: function(err, url, line) {
-        //    alert("error " + err + " occurred at line " + line);
-        //    // Return 'true' if you handled this error and don't want Unity
-        //    // to process it further, 'false' otherwise.
-        //    return true;
-        // },
-      };
-
-      // By default, Unity keeps WebGL canvas render target size matched with
-      // the DOM size of the canvas element (scaled by window.devicePixelRatio)
-      // Set this to false if you want to decouple this synchronization from
-      // happening inside the engine, and you would instead like to size up
-      // the canvas DOM size and WebGL render target sizes yourself.
-      // config.matchWebGLToCanvasSize = false;
-
-      // If you would like all file writes inside Unity Application.persistentDataPath
-      // directory to automatically persist so that the contents are remembered when
-      // the user revisits the site the next time, uncomment the following line:
-      // config.autoSyncPersistentDataPath = true;
-      // This autosyncing is currently not the default behavior to avoid regressing
-      // existing user projects that might rely on the earlier manual
-      // JS_FileSystem_Sync() behavior, but in future Unity version, this will be
-      // expected to change.
-
-      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-        // Mobile device style: fill the whole browser client area with the game canvas:
-
-        var meta = document.createElement('meta');
-        meta.name = 'viewport';
-        meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
-        document.getElementsByTagName('head')[0].appendChild(meta);
-        document.querySelector("#unity-container").className = "unity-mobile";
-        canvas.className = "unity-mobile";
-
-        // To lower canvas resolution on mobile devices to gain some
-        // performance, uncomment the following line:
-        // config.devicePixelRatio = 1;
-
-
-      } else {
-        // Desktop style: Render the game canvas in a window that can be maximized to fullscreen:
-        canvas.style.width = "100%";
-        canvas.style.height = "100%";
-      }
-
-      document.querySelector("#unity-loading-bar").style.display = "block";
-
-      (function installWebPreviewRequestUrlGuard() {
-        var guardKey = "__xrugcWebPreviewRequestUrlGuardInstalled";
-        if (window[guardKey]) {
-          return;
-        }
-
-        window[guardKey] = true;
-
-        function normalizePreviewRequestUrl(url) {
-          if (typeof url !== "string") {
-            return url;
-          }
-
-          var normalized = url.replace(/\\\//g, "/");
-          try {
-            var parsed = new URL(normalized, window.location.href);
-            if (
-              parsed.protocol === "https:" &&
-              (parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost") &&
-              parsed.pathname === "/__xrugc_proxy__"
-            ) {
-              var host = parsed.host || window.location.host || "127.0.0.1:8080";
-              if (host === "localhost:8080") {
-                host = "127.0.0.1:8080";
-              }
-
-              var fixedUrl = "http://" + host + parsed.pathname + parsed.search + parsed.hash;
-              console.warn("[WebPreview] Fixed local proxy request protocol:", url, "->", fixedUrl);
-              return fixedUrl;
-            }
-          } catch (error) {
-            return url;
-          }
-
-          return url;
-        }
-
-        var originalFetch = window.fetch;
-        if (typeof originalFetch === "function") {
-          window.fetch = function(input, init) {
-            if (typeof input === "string") {
-              return originalFetch.call(this, normalizePreviewRequestUrl(input), init);
-            }
-
-            if (typeof Request !== "undefined" && input instanceof Request) {
-              var fixedRequestUrl = normalizePreviewRequestUrl(input.url);
-              if (fixedRequestUrl !== input.url) {
-                return originalFetch.call(this, new Request(fixedRequestUrl, input), init);
-              }
-            }
-
-            return originalFetch.call(this, input, init);
-          };
-        }
-
-        if (window.XMLHttpRequest && window.XMLHttpRequest.prototype.open) {
-          var originalOpen = window.XMLHttpRequest.prototype.open;
-          window.XMLHttpRequest.prototype.open = function(method, url) {
-            var args = Array.prototype.slice.call(arguments);
-            args[1] = normalizePreviewRequestUrl(url);
-            return originalOpen.apply(this, args);
-          };
-        }
-      })();
-
-      function createWebPreviewBridge(unityInstance) {
-        var sceneRetryTimer = 0;
-        var sceneRetryJson = "";
-        var sceneRetryAttempts = 0;
-        var sceneRetryMaxAttempts = 20;
-
-        function toSceneJson(payload) {
-          if (typeof payload === "string") {
-            logScenePayloadSummary(parseScenePayloadForSummary(payload));
-            return payload;
-          }
-
-          try {
-            var preparedPayload = prepareScenePayload(payload || {});
-            logScenePayloadSummary(preparedPayload);
-            return JSON.stringify(preparedPayload);
-          } catch (error) {
-            console.warn("[WebPreview] Failed to stringify scene payload.", error);
-            return "{}";
-          }
-        }
-
-        function parseScenePayloadForSummary(payload) {
-          try {
-            return JSON.parse(payload);
-          } catch (error) {
-            return null;
-          }
-        }
-
-        function prepareScenePayload(payload) {
-          var copy = clonePayload(payload);
-          rewriteRemoteUrls(copy);
-          return copy;
-        }
-
-        function logScenePayloadSummary(payload) {
-          if (!payload || typeof payload !== "object") {
-            return;
-          }
-
-          var scene = payload.scene && typeof payload.scene === "object" ? payload.scene : {};
-          var script = payload.script && typeof payload.script === "object" ? payload.script : {};
-          var metas = Array.isArray(payload.metas) ? payload.metas : [];
-          var lua = readFirstString(script.lua, payload.code, scene.code);
-          var metaSummaries = metas.slice(0, 12).map(function(meta, index) {
-            var code = readFirstString(meta && meta.code, meta && meta.script);
-            return {
-              index: index,
-              id: meta && meta.id,
-              title: meta && (meta.title || meta.name),
-              codeLength: code.length,
-              actions: extractLuaActions(code)
-            };
-          });
-
-          console.log("[WebPreview][Payload] scene", {
-            sceneId: scene.id || payload.sceneId || payload.id,
-            sceneName: scene.name || payload.title || payload.name,
-            metas: metas.length,
-            resources: Array.isArray(payload.resources) ? payload.resources.length : 0,
-            luaLength: lua.length,
-            luaActions: extractLuaActions(lua),
-            metaActions: metaSummaries
-          });
-        }
-
-        function readFirstString() {
-          for (var index = 0; index < arguments.length; index += 1) {
-            if (typeof arguments[index] === "string") {
-              return arguments[index];
-            }
-          }
-
-          return "";
-        }
-
-        function extractLuaActions(code) {
-          if (typeof code !== "string" || !code) {
-            return [];
-          }
-
-          var actions = [];
-          var actionRegex = /(?:meta|verse)\s*\[\s*["']([^"']+)["']\s*\]/g;
-          var match;
-          while ((match = actionRegex.exec(code)) !== null) {
-            var action = match[1];
-            if (!action || action === "@init" || action === "#init" || actions.indexOf(action) !== -1) {
-              continue;
-            }
-
-            actions.push(action);
-          }
-
-          return actions;
-        }
-
-        function clonePayload(payload) {
-          try {
-            if (typeof structuredClone === "function") {
-              return structuredClone(payload);
-            }
-          } catch (error) {
-            console.warn("[WebPreview] structuredClone failed, falling back to JSON clone.", error);
-          }
-
-          return JSON.parse(JSON.stringify(payload));
-        }
-
-        function rewriteRemoteUrls(value) {
-          if (!value || typeof value !== "object") {
-            return;
-          }
-
-          if (Array.isArray(value)) {
-            value.forEach(rewriteRemoteUrls);
-            return;
-          }
-
-          Object.keys(value).forEach(function(key) {
-            var item = value[key];
-            if (typeof item === "string") {
-              value[key] = rewriteStringValue(item);
-              return;
-            }
-
-            rewriteRemoteUrls(item);
-          });
-        }
-
-        function rewriteStringValue(value) {
-          if (/^https?:\/\//i.test(value)) {
-            return toProxyUrl(value);
-          }
-
-          var trimmed = value.trim();
-          if ((trimmed.charAt(0) === "{" || trimmed.charAt(0) === "[") && trimmed.length >= 2) {
-            try {
-              var json = JSON.parse(value);
-              rewriteRemoteUrls(json);
-              return JSON.stringify(json);
-            } catch (error) {
-              return rewritePlainTextUrls(value);
-            }
-          }
-
-          return rewritePlainTextUrls(value);
-        }
-
-        function rewritePlainTextUrls(value) {
-          return value.replace(/https?:\\?\/\\?\/[^\s"'<>]+/gi, function(match) {
-            return toProxyUrl(match.replace(/\\\//g, "/"));
-          });
-        }
-
-        function toProxyUrl(url) {
-          if (!/^https?:\/\//i.test(url)) {
-            return url;
-          }
-
-          try {
-            var parsed = new URL(url);
-            if (parsed.pathname === "/__xrugc_proxy__") {
-              return getProxyOrigin() + parsed.pathname + parsed.search;
-            }
-
-            if (parsed.origin === window.location.origin) {
-              return url;
-            }
-          } catch (error) {
-            return url;
-          }
-
-          return getProxyOrigin() + "/__xrugc_proxy__?url=" + encodeURIComponent(url);
-        }
-
-        function getProxyOrigin() {
-          var host = window.location.host || "127.0.0.1:8080";
-          if (host === "localhost:8080") {
-            host = "127.0.0.1:8080";
-          }
-
-          return "http://" + host;
-        }
-
-        function forwardSceneJson(json, options) {
-          try {
-            unityInstance.SendMessage("WebPreviewBootstrap", "LoadSceneJson", json);
-            if (!(options && options.quiet)) {
-              console.log("[WebPreview] Forwarded scene json to Unity (" + json.length + " chars)");
-            }
-
-            if (window.parent && window.parent !== window) {
-              window.parent.postMessage({
-                type: "unity-web-preview-scene-forwarded",
-                length: json.length
-              }, "*");
-            }
-
-            return true;
-          } catch (error) {
-            console.error("[WebPreview] Failed to send scene json to Unity.", error);
-            return false;
-          }
-        }
-
-        function stopSceneRetry() {
-          if (sceneRetryTimer) {
-            window.clearInterval(sceneRetryTimer);
-            sceneRetryTimer = 0;
-          }
-        }
-
-        function shouldRetryPayload(payload) {
-          return !(payload && payload.source === "webgl-template");
-        }
-
-        function startSceneRetry(json) {
-          stopSceneRetry();
-
-          sceneRetryJson = json;
-          sceneRetryAttempts = 0;
-          sceneRetryTimer = window.setInterval(function() {
-            if (!sceneRetryJson || sceneRetryAttempts >= sceneRetryMaxAttempts) {
-              stopSceneRetry();
-              return;
-            }
-
-            sceneRetryAttempts += 1;
-            forwardSceneJson(sceneRetryJson, { quiet: true });
-          }, 1000);
-        }
-
-        function sendSceneJson(payload, options) {
-          var json = toSceneJson(payload);
-          var retry = shouldRetryPayload(payload) && !(options && options.retry === false);
-
-          forwardSceneJson(json);
-
-          if (retry) {
-            startSceneRetry(json);
-          }
-        }
-
-        function getMessagePayload(data) {
-          if (Object.prototype.hasOwnProperty.call(data, "payload")) {
-            return data.payload;
-          }
-
-          if (Object.prototype.hasOwnProperty.call(data, "scene")) {
-            return data.scene;
-          }
-
-          if (Object.prototype.hasOwnProperty.call(data, "json")) {
-            return data.json;
-          }
-
-          return {};
-        }
-
-        function readInitialScenePayload() {
-          var params = new URLSearchParams(window.location.search);
-          var scene = params.get("scene");
-
-          if (!scene) {
-            return {
-              sceneId: "web-preview-smoke-test",
-              title: "Web Preview Smoke Test",
-              entities: [],
-              scripts: [],
-              source: "webgl-template"
-            };
-          }
-
-          try {
-            return JSON.parse(scene);
-          } catch (error) {
-            console.warn("[WebPreview] The scene query parameter is not valid JSON; forwarding it as raw text.", error);
-            return {
-              sceneId: "web-preview-query",
-              rawScene: scene,
-              source: "query-string"
-            };
-          }
-        }
-
-        var bridge = {
-          unityInstance: unityInstance,
-          sendSceneJson: sendSceneJson,
-          ping: function(message) {
-            unityInstance.SendMessage("WebPreviewBootstrap", "Ping", message || "");
-          },
-          setCameraMode: function(mode) {
-            var nextMode = mode || "orbit";
-            unityInstance.SendMessage("WebPreviewBootstrap", "SetCameraMode", nextMode);
-            console.log("[WebPreview][CameraControl] forwarded camera mode " + nextMode);
-          }
-        };
-
-        window.unityWebPreview = bridge;
-        window.addEventListener("message", function(event) {
-          var data = event.data || {};
-
-          if (data.type === "load-scene-json" || data.type === "xrugc-load-scene-json") {
-            sendSceneJson(getMessagePayload(data));
-          }
-
-          if (data.type === "unity-web-preview-ping") {
-            bridge.ping(data.message || "");
-          }
-
-          if (data.type === "unity-web-preview-camera-mode") {
-            bridge.setCameraMode(data.mode || "orbit");
-          }
-        });
-
-        sendSceneJson(readInitialScenePayload(), { retry: false });
-
-        if (window.parent && window.parent !== window) {
-          window.parent.postMessage({
-            type: "unity-web-preview-ready",
-            productName: "Web Preview",
-            productVersion: "1.0.0"
-          }, "*");
-        }
-
-        return bridge;
-      }
-
-      var script = document.createElement("script");
-      script.src = loaderUrl;
-      script.onload = () => {
-        createUnityInstance(canvas, config, (progress) => {
-          document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
-              }).then((unityInstance) => {
-                document.querySelector("#unity-loading-bar").style.display = "none";
-                document.querySelector("#unity-fullscreen-button").onclick = () => {
-                  unityInstance.SetFullscreen(1);
-                };
-
-                createWebPreviewBridge(unityInstance);
-
-              }).catch((message) => {
-                alert(message);
-              });
-            };
-
-      document.body.appendChild(script);
-
-    </script>
+        <div class="status" data-status>启动中</div>
+      </header>
+
+      <section class="workspace">
+        <aside class="control-panel" aria-label="场景运行控制">
+          <div class="field">
+            <label for="scene-id">场景号</label>
+            <input
+              id="scene-id"
+              class="scene-input"
+              data-scene-id
+              inputmode="numeric"
+              autocomplete="off"
+              placeholder="例如 632"
+            />
+          </div>
+
+          <div class="actions">
+            <button class="button button-primary" type="button" data-run>
+              运行场景
+            </button>
+            <button
+              class="button icon-button"
+              type="button"
+              title="重载 Unity"
+              aria-label="重载 Unity"
+              data-reload
+            >
+              ↻
+            </button>
+          </div>
+
+          <section class="api-panel" aria-label="接口信息">
+            <h2 class="panel-title">接口</h2>
+            <dl class="meta-list">
+              <div class="meta-row">
+                <span>API</span>
+                <span data-api-base>检测中</span>
+              </div>
+            </dl>
+            <p class="hint">
+              在主系统插件页打开时会自动使用宿主登录态。独立打开时可通过
+              <code>?api=https://d.dev.xrugc.com/api</code> 指定接口。
+            </p>
+          </section>
+
+          <section class="result-panel" aria-label="场景信息">
+            <h2 class="panel-title">当前场景</h2>
+            <dl class="meta-list">
+              <div class="meta-row">
+                <span>名称</span>
+                <span data-scene-name>-</span>
+              </div>
+              <div class="meta-row">
+                <span>资源</span>
+                <span data-resource-count>0</span>
+              </div>
+              <div class="meta-row">
+                <span>实体</span>
+                <span data-meta-count>0</span>
+              </div>
+              <div class="meta-row">
+                <span>Lua</span>
+                <span data-lua-length>0</span>
+              </div>
+            </dl>
+          </section>
+
+          <section class="result-panel" aria-label="运行日志">
+            <h2 class="panel-title">日志</h2>
+            <pre class="log" data-log></pre>
+          </section>
+        </aside>
+
+        <section class="viewer" aria-label="Unity WebGL 预览">
+          <iframe
+            class="preview-frame"
+            title="Unity WebGL 场景"
+            data-frame
+            allow="fullscreen; clipboard-read; clipboard-write"
+          ></iframe>
+        </section>
+      </section>
+    </main>
+
+    <script type="module" src="./modules/plugin-runner.js?v=2026.05.15.1"></script>
   </body>
 </html>

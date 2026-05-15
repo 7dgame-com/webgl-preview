@@ -4,7 +4,10 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const required = [
   'nginx.conf',
+  'public/index.html',
   'public/embed.html',
+  'public/modules/plugin-runner.js',
+  'public/styles/plugin-runner.css',
   'public/sw.js',
   'public/plugin/manifest.json',
 ];
@@ -72,8 +75,13 @@ if (manifest.id !== 'webgl-preview') {
   process.exit(1);
 }
 
-if (manifest.entry?.frontend !== '/embed.html') {
+if (manifest.entry?.frontend !== '/index.html') {
   console.error(`Unexpected frontend entry: ${manifest.entry?.frontend}`);
+  process.exit(1);
+}
+
+if (manifest.entry?.runner !== '/embed.html') {
+  console.error(`Unexpected runner entry: ${manifest.entry?.runner}`);
   process.exit(1);
 }
 
@@ -83,6 +91,7 @@ for (const expectedSnippet of [
   'proxy_pass $arg_url',
   'location ~* \\.wasm\\.br$',
   'Content-Encoding br',
+  'location = /index.html',
   'location = /sw.js',
 ]) {
   if (!nginxConfig.includes(expectedSnippet)) {
