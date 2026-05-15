@@ -7,13 +7,13 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <title>WebGL</title>
-    <link rel="stylesheet" href="./styles/plugin-runner.css?v=2026.05.15.8" />
+    <link rel="stylesheet" href="./styles/plugin-runner.css?v=2026.05.15.10" />
   </head>
   <body>
     <main class="app-shell">
       <header class="topbar" aria-label="WebGL 控制栏">
         <div class="controls">
-          <label class="scene-field" for="scene-id">
+          <label class="scene-field" for="scene-id" data-scene-field>
             <span>场景号</span>
             <input
               id="scene-id"
@@ -28,10 +28,13 @@
           <button class="button button-primary" type="button" data-run>
             运行
           </button>
-          <button class="button" type="button" data-stop>
+          <button class="button" type="button" data-pause hidden>
+            暂停
+          </button>
+          <button class="button" type="button" data-stop hidden>
             停止
           </button>
-          <button class="button" type="button" data-reload>
+          <button class="button" type="button" data-reload hidden>
             重跑
           </button>
         </div>
@@ -61,6 +64,6 @@
       </section>
     </main>
 
-    <script type="module" src="./modules/plugin-runner.js?v=2026.05.15.8"></script>
+    <script type="module" src="./modules/plugin-runner.js?v=2026.05.15.10"></script>
   </body>
 </html>

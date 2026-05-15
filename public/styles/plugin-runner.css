@@ -28,6 +28,10 @@ input {
   font: inherit;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .app-shell {
   width: 100vw;
   height: 100vh;
