@@ -6,6 +6,7 @@ const LEGACY_COS_HOST =
 const CDN_HOST = "data.7dgame.com";
 const ASSET_PATH_RE =
   /\.(?:png|jpe?g|gif|webp|bmp|svg|mp3|wav|ogg|m4a|mp4|webm|glb|gltf|fbx|obj|vox)(?:[?#]|$)/i;
+const LOCAL_TOKEN_STORAGE_KEY = "xrugc.webglPreview.token";
 
 const state = {
   token: "",
@@ -20,6 +21,9 @@ const elements = {
   sceneId: document.querySelector("[data-scene-id]"),
   run: document.querySelector("[data-run]"),
   reload: document.querySelector("[data-reload]"),
+  tokenInput: document.querySelector("[data-token-input]"),
+  saveToken: document.querySelector("[data-save-token]"),
+  tokenState: document.querySelector("[data-token-state]"),
   apiBase: document.querySelector("[data-api-base]"),
   sceneName: document.querySelector("[data-scene-name]"),
   resourceCount: document.querySelector("[data-resource-count]"),
@@ -83,6 +87,46 @@ function resolveApiBase() {
   );
 }
 
+function readStoredToken() {
+  try {
+    return localStorage.getItem(LOCAL_TOKEN_STORAGE_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function writeStoredToken(token) {
+  try {
+    if (token) {
+      localStorage.setItem(LOCAL_TOKEN_STORAGE_KEY, token);
+    } else {
+      localStorage.removeItem(LOCAL_TOKEN_STORAGE_KEY);
+    }
+  } catch {
+    // Local storage can be disabled in restricted browser contexts.
+  }
+}
+
+function setToken(token, options = {}) {
+  const value = (token || "").trim();
+  state.token = value;
+  if (elements.tokenInput) {
+    elements.tokenInput.value = value;
+  }
+  if (elements.tokenState) {
+    elements.tokenState.textContent = value ? "已配置" : "未配置";
+  }
+  if (options.persist) {
+    writeStoredToken(value);
+  }
+}
+
+function initLocalToken() {
+  const query = readQuery();
+  const queryToken = query.get("token") || query.get("access_token") || "";
+  setToken(queryToken || readStoredToken());
+}
+
 function resolveAssetBaseOrigin() {
   try {
     const apiBase = new URL(resolveApiBase());
@@ -116,7 +160,7 @@ function handleHostMessage(event) {
 
   if (message.type === "INIT") {
     const payload = message.payload || {};
-    state.token = typeof payload.token === "string" ? payload.token : "";
+    setToken(typeof payload.token === "string" ? payload.token : "");
     state.config =
       payload.config && typeof payload.config === "object" ? payload.config : {};
     elements.apiBase.textContent = resolveApiBase();
@@ -126,7 +170,7 @@ function handleHostMessage(event) {
 
   if (message.type === "TOKEN_UPDATE") {
     const payload = message.payload || {};
-    state.token = typeof payload.token === "string" ? payload.token : "";
+    setToken(typeof payload.token === "string" ? payload.token : "");
     log("登录 token 已更新。");
   }
 }
@@ -380,6 +424,11 @@ async function requestVerse(sceneId, cl) {
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");
+    if (response.status === 401 && !state.token) {
+      throw new Error(
+        "API 401: 本地独立运行缺少登录态，请在“本地访问令牌”里粘贴平台 token 后重试。"
+      );
+    }
     throw new Error(`API ${response.status}: ${text || response.statusText}`);
   }
 
@@ -518,6 +567,16 @@ function setupControls() {
   elements.reload.addEventListener("click", () => {
     elements.frame.src = `./embed.html?embed=1&plugin=1&v=${Date.now()}`;
   });
+  elements.saveToken.addEventListener("click", () => {
+    setToken(elements.tokenInput.value, { persist: true });
+    log(state.token ? "本地访问令牌已保存。" : "本地访问令牌已清空。");
+  });
+  elements.tokenInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      setToken(elements.tokenInput.value, { persist: true });
+      log(state.token ? "本地访问令牌已保存。" : "本地访问令牌已清空。");
+    }
+  });
   elements.sceneId.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       runScene();
@@ -526,6 +585,7 @@ function setupControls() {
 }
 
 function init() {
+  initLocalToken();
   readInitialSceneId();
   elements.apiBase.textContent = resolveApiBase();
   setupControls();

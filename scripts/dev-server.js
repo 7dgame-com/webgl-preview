@@ -80,7 +80,7 @@ async function proxyRemoteAsset(req, res, proxyUrl) {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-      'Access-Control-Allow-Headers': 'Range, If-Range, Content-Type',
+      'Access-Control-Allow-Headers': 'Authorization, Range, If-Range, Content-Type',
       'Access-Control-Max-Age': '86400',
     });
     res.end();

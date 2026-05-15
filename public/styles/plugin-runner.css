@@ -128,6 +128,17 @@ input {
   box-shadow: 0 0 0 3px rgba(56, 119, 213, 0.14);
 }
 
+.compact-field {
+  margin: 14px 0 10px;
+}
+
+.token-input {
+  font-size: 12px;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    monospace;
+}
+
 .actions {
   display: grid;
   grid-template-columns: 1fr 44px;
@@ -164,6 +175,12 @@ input {
 .button-primary:hover:not(:disabled) {
   border-color: #174f9d;
   background: #174f9d;
+}
+
+.button-secondary {
+  width: 100%;
+  height: 34px;
+  font-size: 13px;
 }
 
 .icon-button {
