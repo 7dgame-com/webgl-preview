@@ -87,6 +87,7 @@ if (manifest.entry?.runner !== '/embed.html') {
 
 const nginxConfig = fs.readFileSync(path.join(root, 'nginx.conf'), 'utf8');
 for (const expectedSnippet of [
+  'location = /health',
   'location = /__xrugc_proxy__',
   'proxy_pass $arg_url',
   'location ~* \\.wasm\\.br$',

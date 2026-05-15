@@ -162,7 +162,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (url.pathname === '/api/health' || url.pathname === '/plugin/health') {
+  if (url.pathname === '/health' || url.pathname === '/api/health' || url.pathname === '/plugin/health') {
     sendJson(res, {
       success: true,
       data: {

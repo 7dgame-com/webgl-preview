@@ -1,9 +1,11 @@
 services:
   webgl-preview-d:
-    image: ${WEBGL_PREVIEW_D_IMAGE:-hkccr.ccs.tencentyun.com/plugins/webgl-preview:develop}
+    image: hkccr.ccs.tencentyun.com/plugins/webgl-preview:develop
     networks:
       - proxy
       - internal
+    environment:
+      - HOST_API_BASE=https://d.dev.xrugc.com
     labels:
       - traefik.enable=true
       - traefik.docker.network=proxy
@@ -23,7 +25,7 @@ services:
       - traefik.http.middlewares.webgl-preview-d-strip.stripprefix.prefixes=/webgl-preview
       - traefik.http.services.webgl-preview-d.loadbalancer.server.port=80
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/api/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/health"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -31,10 +33,12 @@ services:
     restart: unless-stopped
 
   webgl-preview:
-    image: ${WEBGL_PREVIEW_IMAGE:-hkccr.ccs.tencentyun.com/plugins/webgl-preview:main}
+    image: hkccr.ccs.tencentyun.com/plugins/webgl-preview:publish
     networks:
       - proxy
       - internal
+    environment:
+      - HOST_API_BASE=https://xrugc.com
     labels:
       - traefik.enable=true
       - traefik.docker.network=proxy
@@ -54,7 +58,7 @@ services:
       - traefik.http.middlewares.webgl-preview-strip.stripprefix.prefixes=/webgl-preview
       - traefik.http.services.webgl-preview.loadbalancer.server.port=80
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/api/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/health"]
       interval: 30s
       timeout: 5s
       retries: 3
