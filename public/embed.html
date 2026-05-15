@@ -207,6 +207,7 @@
       })();
 
       function createWebPreviewBridge(unityInstance) {
+        var VIDEO_PATH_RE = /\.(?:mp4|webm)(?:[?#]|$)/i;
         function toSceneJson(payload) {
           if (typeof payload === "string") {
             logScenePayloadSummary(parseScenePayloadForSummary(payload));
@@ -370,11 +371,31 @@
             if (parsed.origin === window.location.origin) {
               return url;
             }
+
+            if (VIDEO_PATH_RE.test(parsed.pathname)) {
+              return normalizeRemoteAssetUrl(url);
+            }
           } catch (error) {
             return url;
           }
 
           return getProxyOrigin() + "/__xrugc_proxy__?url=" + encodeURIComponent(url);
+        }
+
+        function normalizeRemoteAssetUrl(value) {
+          try {
+            var parsed = new URL(value.replace(/\\\//g, "/"));
+            if (parsed.protocol === "http:") {
+              parsed.protocol = "https:";
+            }
+            if (parsed.hostname === "7dgame-public-1251022382.cos.ap-nanjing.myqcloud.com") {
+              parsed.protocol = "https:";
+              parsed.hostname = "data.7dgame.com";
+            }
+            return parsed.toString();
+          } catch (error) {
+            return value;
+          }
         }
 
         function getProxyOrigin() {

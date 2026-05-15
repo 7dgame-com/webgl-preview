@@ -9,6 +9,7 @@ const LEGACY_COS_HOST =
 const CDN_HOST = "data.7dgame.com";
 const ASSET_PATH_RE =
   /\.(?:png|jpe?g|gif|webp|bmp|svg|mp3|wav|ogg|m4a|mp4|webm|glb|gltf|fbx|obj|vox)(?:[?#]|$)/i;
+const VIDEO_PATH_RE = /\.(?:mp4|webm)(?:[?#]|$)/i;
 const LOCAL_TOKEN_STORAGE_KEY = "xrugc.webglPreview.token";
 
 const state = {
@@ -354,6 +355,9 @@ function toUnityPreviewProxyUrl(value, proxyOrigin, assetBaseOrigin) {
     }
 
     const absoluteUrl = new URL(normalizedValue, assetBaseOrigin).toString();
+    if (VIDEO_PATH_RE.test(absoluteUrl)) {
+      return normalizeUnityPreviewRemoteAssetUrl(absoluteUrl);
+    }
     return `${proxyOrigin}/__xrugc_proxy__?url=${encodeURIComponent(
       normalizeUnityPreviewRemoteAssetUrl(absoluteUrl)
     )}`;
@@ -365,6 +369,9 @@ function toUnityPreviewProxyUrl(value, proxyOrigin, assetBaseOrigin) {
       return `${proxyOrigin}${url.pathname}${url.search}`;
     }
     if (url.origin === proxyOrigin) return normalizedValue;
+    if (VIDEO_PATH_RE.test(url.pathname)) {
+      return normalizeUnityPreviewRemoteAssetUrl(normalizedValue);
+    }
   } catch {
     return value;
   }
