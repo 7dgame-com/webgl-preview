@@ -6,120 +6,61 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
-    <title>WebGL 场景运行器</title>
-    <link rel="stylesheet" href="./styles/plugin-runner.css?v=2026.05.15.4" />
+    <title>WebGL</title>
+    <link rel="stylesheet" href="./styles/plugin-runner.css?v=2026.05.15.5" />
   </head>
   <body>
     <main class="app-shell">
-      <header class="topbar">
-        <div class="brand">
-          <h1 class="title">WebGL 场景运行器</h1>
-          <p class="subtitle">输入场景号后读取平台数据并在 Unity WebGL 中运行</p>
-        </div>
-        <div class="status" data-status>启动中</div>
-      </header>
-
-      <section class="workspace">
-        <aside class="control-panel" aria-label="场景运行控制">
-          <div class="field">
-            <label for="scene-id">场景号</label>
+      <header class="topbar" aria-label="WebGL 控制栏">
+        <div class="controls">
+          <label class="scene-field" for="scene-id">
+            <span>场景号</span>
             <input
               id="scene-id"
               class="scene-input"
               data-scene-id
               inputmode="numeric"
               autocomplete="off"
-              placeholder="例如 632"
+              placeholder="例如 1416"
             />
-          </div>
+          </label>
 
-          <div class="actions">
-            <button class="button button-primary" type="button" data-run>
-              运行场景
-            </button>
-            <button
-              class="button icon-button"
-              type="button"
-              title="重载 Unity"
-              aria-label="重载 Unity"
-              data-reload
-            >
-              ↻
-            </button>
-          </div>
+          <button class="button button-primary" type="button" data-run>
+            运行
+          </button>
+          <button class="button" type="button" data-stop>
+            停止
+          </button>
+          <button class="button" type="button" data-reload>
+            重跑
+          </button>
+        </div>
 
-          <section class="api-panel" aria-label="接口信息">
-            <h2 class="panel-title">接口</h2>
-            <dl class="meta-list">
-              <div class="meta-row">
-                <span>数据源</span>
-                <span data-api-base>检测中</span>
-              </div>
-              <div class="meta-row">
-                <span>登录态</span>
-                <span data-token-state>未配置</span>
-              </div>
-            </dl>
-            <div class="field compact-field">
-              <label for="access-token">本地访问令牌</label>
-              <input
-                id="access-token"
-                class="scene-input token-input"
-                data-token-input
-                autocomplete="off"
-                spellcheck="false"
-                placeholder="本地直开时粘贴 token"
-              />
-            </div>
-            <button class="button button-secondary" type="button" data-save-token>
-              保存令牌
-            </button>
-            <p class="hint">
-              默认通过 snapshot 公开接口读取场景。需要调试旧接口时可通过
-              <code>?source=legacy&amp;api=https://d.dev.xrugc.com/api</code>
-              切换，并可用 <code>?token=...</code> 临时传入令牌。
-            </p>
-          </section>
+        <div class="status" data-status>待运行</div>
+      </header>
 
-          <section class="result-panel" aria-label="场景信息">
-            <h2 class="panel-title">当前场景</h2>
-            <dl class="meta-list">
-              <div class="meta-row">
-                <span>名称</span>
-                <span data-scene-name>-</span>
-              </div>
-              <div class="meta-row">
-                <span>资源</span>
-                <span data-resource-count>0</span>
-              </div>
-              <div class="meta-row">
-                <span>实体</span>
-                <span data-meta-count>0</span>
-              </div>
-              <div class="meta-row">
-                <span>Lua</span>
-                <span data-lua-length>0</span>
-              </div>
-            </dl>
-          </section>
+      <section class="viewer" aria-label="Unity WebGL 预览">
+        <iframe
+          class="preview-frame"
+          title="Unity WebGL"
+          data-frame
+          allow="fullscreen; clipboard-read; clipboard-write"
+        ></iframe>
+      </section>
 
-          <section class="result-panel" aria-label="运行日志">
-            <h2 class="panel-title">日志</h2>
-            <pre class="log" data-log></pre>
-          </section>
-        </aside>
-
-        <section class="viewer" aria-label="Unity WebGL 预览">
-          <iframe
-            class="preview-frame"
-            title="Unity WebGL 场景"
-            data-frame
-            allow="fullscreen; clipboard-read; clipboard-write"
-          ></iframe>
-        </section>
+      <section hidden aria-hidden="true">
+        <span data-api-base></span>
+        <span data-token-state></span>
+        <input data-token-input />
+        <button type="button" data-save-token></button>
+        <span data-scene-name></span>
+        <span data-resource-count></span>
+        <span data-meta-count></span>
+        <span data-lua-length></span>
+        <pre data-log></pre>
       </section>
     </main>
 
-    <script type="module" src="./modules/plugin-runner.js?v=2026.05.15.4"></script>
+    <script type="module" src="./modules/plugin-runner.js?v=2026.05.15.5"></script>
   </body>
 </html>

@@ -17,12 +17,14 @@ const state = {
   payload: null,
   frameReady: false,
   pendingRun: false,
+  stopped: false,
 };
 
 const elements = {
   status: document.querySelector("[data-status]"),
   sceneId: document.querySelector("[data-scene-id]"),
   run: document.querySelector("[data-run]"),
+  stop: document.querySelector("[data-stop]"),
   reload: document.querySelector("[data-reload]"),
   tokenInput: document.querySelector("[data-token-input]"),
   saveToken: document.querySelector("[data-save-token]"),
@@ -49,6 +51,12 @@ function log(message, detail) {
 function setStatus(text, tone) {
   elements.status.textContent = text;
   elements.status.dataset.tone = tone || "";
+}
+
+function setControlsBusy(isBusy) {
+  elements.run.disabled = isBusy;
+  elements.reload.disabled = isBusy;
+  elements.stop.disabled = isBusy && state.stopped;
 }
 
 function readQuery() {
@@ -523,7 +531,12 @@ function updateSummary(payload) {
 }
 
 function sendPayloadToUnity(payload) {
-  if (!elements.frame.contentWindow) {
+  if (state.stopped) {
+    state.pendingRun = true;
+    return;
+  }
+
+  if (!state.frameReady || !elements.frame.contentWindow) {
     state.pendingRun = true;
     return;
   }
@@ -551,7 +564,8 @@ async function runScene() {
     return;
   }
 
-  elements.run.disabled = true;
+  state.stopped = false;
+  setControlsBusy(true);
   setStatus("读取场景中", "busy");
   log(`开始读取场景 ${sceneId}。`);
 
@@ -571,7 +585,7 @@ async function runScene() {
     setStatus("运行失败", "error");
     log(error instanceof Error ? error.message : String(error));
   } finally {
-    elements.run.disabled = false;
+    setControlsBusy(false);
   }
 }
 
@@ -581,9 +595,42 @@ function readInitialSceneId() {
   if (value) elements.sceneId.value = value;
 }
 
-function setupFrame() {
+function loadUnityFrame({ clearPayload = false, autoRun = false } = {}) {
+  state.stopped = false;
+  state.frameReady = false;
+  if (clearPayload) {
+    state.payload = null;
+  }
+  if (autoRun) {
+    state.pendingRun = true;
+  }
   elements.frame.src = `./embed.html?embed=1&plugin=1&v=${Date.now()}`;
+}
+
+function stopScene() {
+  state.stopped = true;
+  state.pendingRun = false;
+  state.frameReady = false;
+  elements.frame.src = "about:blank";
+  setStatus("已停止", "");
+  log("已停止。");
+}
+
+function rerunScene() {
+  if (!elements.sceneId.value) {
+    elements.sceneId.focus();
+    setStatus("请输入场景号", "error");
+    return;
+  }
+  loadUnityFrame({ clearPayload: true, autoRun: true });
+  runScene();
+}
+
+function setupFrame() {
   elements.frame.addEventListener("load", () => {
+    if (state.stopped || elements.frame.src === "about:blank") {
+      return;
+    }
     state.frameReady = true;
     log("Unity iframe 已加载。");
     if (state.payload) {
@@ -604,13 +651,13 @@ function setupFrame() {
       log("Unity runner 已接收场景。", { length: message.length });
     }
   });
+  loadUnityFrame();
 }
 
 function setupControls() {
   elements.run.addEventListener("click", runScene);
-  elements.reload.addEventListener("click", () => {
-    elements.frame.src = `./embed.html?embed=1&plugin=1&v=${Date.now()}`;
-  });
+  elements.stop.addEventListener("click", stopScene);
+  elements.reload.addEventListener("click", rerunScene);
   elements.saveToken.addEventListener("click", () => {
     setToken(elements.tokenInput.value, { persist: true });
     log(state.token ? "本地访问令牌已保存。" : "本地访问令牌已清空。");
