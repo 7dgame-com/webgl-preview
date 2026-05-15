@@ -331,15 +331,28 @@ function normalizeUnityPreviewRemoteAssetUrl(value) {
   }
 }
 
+function normalizeUnityPreviewVideoUrl(value) {
+  try {
+    const url = new URL(value.replace(/\\\//g, "/"));
+    if (url.protocol === "http:") {
+      url.protocol = "https:";
+    }
+    return url.toString();
+  } catch {
+    return value;
+  }
+}
+
 function toUnityPreviewProxyUrl(value, proxyOrigin, assetBaseOrigin) {
   const normalizedValue = value.replace(/\\\//g, "/");
   if (!/^https?:\/\//i.test(normalizedValue)) {
     if (normalizedValue.startsWith("//")) {
-      const absoluteUrl = normalizeUnityPreviewRemoteAssetUrl(
-        `${window.location.protocol}${normalizedValue}`
-      );
+      const absoluteUrl = `${window.location.protocol}${normalizedValue}`;
+      if (VIDEO_PATH_RE.test(absoluteUrl)) {
+        return normalizeUnityPreviewVideoUrl(absoluteUrl);
+      }
       return `${proxyOrigin}/__xrugc_proxy__?url=${encodeURIComponent(
-        absoluteUrl
+        normalizeUnityPreviewRemoteAssetUrl(absoluteUrl)
       )}`;
     }
 
@@ -356,7 +369,7 @@ function toUnityPreviewProxyUrl(value, proxyOrigin, assetBaseOrigin) {
 
     const absoluteUrl = new URL(normalizedValue, assetBaseOrigin).toString();
     if (VIDEO_PATH_RE.test(absoluteUrl)) {
-      return normalizeUnityPreviewRemoteAssetUrl(absoluteUrl);
+      return normalizeUnityPreviewVideoUrl(absoluteUrl);
     }
     return `${proxyOrigin}/__xrugc_proxy__?url=${encodeURIComponent(
       normalizeUnityPreviewRemoteAssetUrl(absoluteUrl)
@@ -370,7 +383,7 @@ function toUnityPreviewProxyUrl(value, proxyOrigin, assetBaseOrigin) {
     }
     if (url.origin === proxyOrigin) return normalizedValue;
     if (VIDEO_PATH_RE.test(url.pathname)) {
-      return normalizeUnityPreviewRemoteAssetUrl(normalizedValue);
+      return normalizeUnityPreviewVideoUrl(normalizedValue);
     }
   } catch {
     return value;

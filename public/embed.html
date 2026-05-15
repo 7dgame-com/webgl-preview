@@ -204,6 +204,35 @@
             return originalOpen.apply(this, args);
           };
         }
+
+        if (window.HTMLMediaElement) {
+          var mediaSrcDescriptor = Object.getOwnPropertyDescriptor(
+            window.HTMLMediaElement.prototype,
+            "src"
+          );
+          if (mediaSrcDescriptor && typeof mediaSrcDescriptor.set === "function") {
+            Object.defineProperty(window.HTMLMediaElement.prototype, "src", {
+              configurable: true,
+              enumerable: mediaSrcDescriptor.enumerable,
+              get: mediaSrcDescriptor.get,
+              set: function(value) {
+                return mediaSrcDescriptor.set.call(this, normalizePreviewRequestUrl(value));
+              },
+            });
+          }
+
+          var originalMediaSetAttribute = window.HTMLMediaElement.prototype.setAttribute;
+          window.HTMLMediaElement.prototype.setAttribute = function(name, value) {
+            if (String(name).toLowerCase() === "src") {
+              return originalMediaSetAttribute.call(
+                this,
+                name,
+                normalizePreviewRequestUrl(value)
+              );
+            }
+            return originalMediaSetAttribute.call(this, name, value);
+          };
+        }
       })();
 
       function createWebPreviewBridge(unityInstance) {
@@ -373,13 +402,25 @@
             }
 
             if (VIDEO_PATH_RE.test(parsed.pathname)) {
-              return normalizeRemoteAssetUrl(url);
+              return normalizeVideoUrl(url);
             }
           } catch (error) {
             return url;
           }
 
           return getProxyOrigin() + "/__xrugc_proxy__?url=" + encodeURIComponent(url);
+        }
+
+        function normalizeVideoUrl(value) {
+          try {
+            var parsed = new URL(value.replace(/\\\//g, "/"));
+            if (parsed.protocol === "http:") {
+              parsed.protocol = "https:";
+            }
+            return parsed.toString();
+          } catch (error) {
+            return value;
+          }
         }
 
         function normalizeRemoteAssetUrl(value) {
