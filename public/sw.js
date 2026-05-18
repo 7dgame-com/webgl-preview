@@ -10,7 +10,7 @@ const CACHEABLE_PATHS = [
 ];
 
 const CACHEABLE_REQUEST_RE =
-  /\/(?:Build\/(?:(?:[a-f0-9]{32}|public)\.(?:loader\.js|data\.(?:br|gz)|framework\.js\.(?:br|gz)|wasm\.(?:br|gz)))|TemplateData\/(?:style\.css|favicon\.ico))(?:[?#]|$)/i;
+  /\/(?:Build\/(?:(?:[a-f0-9]{32}|public)\.(?:loader\.js|framework\.js\.(?:br|gz)))|TemplateData\/(?:style\.css|favicon\.ico))(?:[?#]|$)/i;
 
 const withVersion = (path) => {
   const url = new URL(path, self.location.href);
