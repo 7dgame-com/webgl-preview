@@ -28,8 +28,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
-        with:
-          lfs: true
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -52,8 +50,19 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
-        with:
-          lfs: true
+
+      - name: Restore Unity WebGL build assets
+        env:
+          WEBGL_BUILD_ASSET_BASE: https://webgl-preview-d.plugins.xrugc.com/Build
+        run: |
+          set -euo pipefail
+          mkdir -p public/Build
+          for file in public.data.gz public.framework.js.gz public.wasm.gz; do
+            curl -fL --retry 5 --retry-delay 3 \
+              "$WEBGL_BUILD_ASSET_BASE/$file" \
+              -o "public/Build/$file"
+            test -s "public/Build/$file"
+          done
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
