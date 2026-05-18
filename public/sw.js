@@ -11,6 +11,13 @@ const CACHEABLE_PATHS = [
   "TemplateData/favicon.ico",
 ];
 
+const WARM_CACHEABLE_PATHS = [
+  "Build/public.loader.js",
+  "Build/public.framework.js.gz",
+  "TemplateData/style.css",
+  "TemplateData/favicon.ico",
+];
+
 const CACHEABLE_REQUEST_RE =
   /\/(?:Build\/(?:(?:[a-f0-9]{32}|public)\.(?:loader\.js|framework\.js\.(?:br|gz)|data\.(?:br|gz)|wasm\.(?:br|gz)))|TemplateData\/(?:style\.css|favicon\.ico))(?:[?#]|$)/i;
 
@@ -85,7 +92,7 @@ const warmPreviewCache = async (clientId) => {
   const abortController = new AbortController();
   warmAbortController = abortController;
   const cache = await caches.open(WEBGL_PREVIEW_CACHE_NAME);
-  const total = CACHEABLE_PATHS.length;
+  const total = WARM_CACHEABLE_PATHS.length;
 
   await postCacheStatus(clientId, {
     status: "started",
@@ -95,8 +102,8 @@ const warmPreviewCache = async (clientId) => {
   });
 
   try {
-    for (let index = 0; index < CACHEABLE_PATHS.length; index += 1) {
-      const path = CACHEABLE_PATHS[index];
+    for (let index = 0; index < WARM_CACHEABLE_PATHS.length; index += 1) {
+      const path = WARM_CACHEABLE_PATHS[index];
       const request = new Request(withVersion(path), {
         cache: "reload",
         credentials: "same-origin",

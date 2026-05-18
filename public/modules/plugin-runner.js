@@ -736,7 +736,7 @@ function setupFrame() {
         const path = message.path ? `：${message.path}` : "";
         setLoadingShield(
           true,
-          `正在缓存插件资源 ${completed}/${total}${path}。首次加载会较慢，请勿退出或重复操作。`,
+          `正在准备插件资源 ${completed}/${total}${path}。首次加载 Unity 大包会较慢，请勿退出或重复操作。`,
           "正在缓存 WebGL 插件"
         );
       }
