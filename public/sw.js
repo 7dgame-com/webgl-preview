@@ -1,12 +1,10 @@
-const WEBGL_PREVIEW_CACHE_VERSION = "2026.05.14.4";
+const WEBGL_PREVIEW_CACHE_VERSION = "2026.05.18.1";
 const WEBGL_PREVIEW_CACHE_NAME =
   "xrugc-webgl-preview-" + WEBGL_PREVIEW_CACHE_VERSION;
 
 const CACHEABLE_PATHS = [
   "Build/public.loader.js",
-  "Build/public.data.gz",
   "Build/public.framework.js.gz",
-  "Build/public.wasm.gz",
   "TemplateData/style.css",
   "TemplateData/favicon.ico",
 ];
@@ -47,8 +45,12 @@ self.addEventListener("activate", (event) => {
 const fetchAndCache = async (request) => {
   const response = await fetch(request);
   if (response.ok || response.type === "opaque") {
-    const cache = await caches.open(WEBGL_PREVIEW_CACHE_NAME);
-    await cache.put(request, response.clone());
+    caches
+      .open(WEBGL_PREVIEW_CACHE_NAME)
+      .then((cache) => cache.put(request, response.clone()))
+      .catch((error) => {
+        console.warn("[WebPreview] Cache write skipped.", error);
+      });
   }
   return response;
 };
