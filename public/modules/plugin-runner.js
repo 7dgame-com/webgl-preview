@@ -1,4 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
+const WEBGL_PREVIEW_VERSION = "2026.05.18.7";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -26,6 +27,7 @@ const state = {
 
 const elements = {
   status: document.querySelector("[data-status]"),
+  version: document.querySelector("[data-version]"),
   sceneField: document.querySelector("[data-scene-field]"),
   sceneId: document.querySelector("[data-scene-id]"),
   run: document.querySelector("[data-run]"),
@@ -78,6 +80,12 @@ function setLoadingShield(visible, detail, title) {
   if (title) elements.loadingTitle.textContent = title;
   if (detail) elements.loadingDetail.textContent = detail;
   renderControls();
+}
+
+function hideLoadingShieldIfReady() {
+  if (!state.cacheActive && state.frameReady && !state.busy) {
+    setLoadingShield(false);
+  }
 }
 
 function setControlsBusy(isBusy) {
@@ -629,6 +637,7 @@ async function runScene() {
   state.running = true;
   setControlsBusy(true);
   setStatus("读取场景中", "busy");
+  setLoadingShield(true, `正在读取场景 ${sceneId}，请稍候。`, "正在加载场景");
   log(`开始读取场景 ${sceneId}。`);
 
   try {
@@ -638,17 +647,22 @@ async function runScene() {
           requestLegacyVerse(sceneId, "js"),
         ])
       : [await requestSnapshot(sceneId), {}];
+    setLoadingShield(true, "正在整理场景资源、脚本和实体数据。", "正在准备场景");
     const payload = buildPayload(sceneId, runtimeData, scriptRuntimeData);
     state.payload = payload;
     updateSummary(payload);
-    setStatus("运行中", "ready");
+    setStatus("发送到 Unity", "busy");
+    setLoadingShield(true, "场景数据已读取完成，正在发送到 Unity。", "正在启动场景");
     sendPayloadToUnity(payload);
+    setStatus("运行中", "ready");
   } catch (error) {
     state.running = false;
     setStatus("运行失败", "error");
+    setLoadingShield(false);
     log(error instanceof Error ? error.message : String(error));
   } finally {
     setControlsBusy(false);
+    hideLoadingShieldIfReady();
   }
 }
 
@@ -667,6 +681,11 @@ function loadUnityFrame({ clearPayload = false, autoRun = false } = {}) {
   if (autoRun) {
     state.pendingRun = true;
   }
+  setLoadingShield(
+    true,
+    "正在重新加载 Unity WebGL 运行环境，请稍候。",
+    "正在重启 WebGL 插件"
+  );
   elements.frame.src = `./embed.html?embed=1&plugin=1&v=${Date.now()}`;
 }
 
@@ -677,6 +696,7 @@ function stopScene() {
   state.running = false;
   elements.frame.src = "about:blank";
   setStatus("已停止", "");
+  setLoadingShield(false);
   renderControls();
   log("已停止。");
 }
@@ -717,12 +737,26 @@ function setupFrame() {
         setLoadingShield(false);
       }
       log("Unity runner 已就绪。");
+      if (!state.running) {
+        setStatus("请输入场景号", "ready");
+      }
       if (state.payload) {
         sendPayloadToUnity(state.payload);
       }
     }
     if (message.type === "unity-web-preview-scene-forwarded") {
       log("Unity runner 已接收场景。", { length: message.length });
+    }
+    if (message.type === "webgl-preview-loading") {
+      if (message.visible) {
+        setLoadingShield(
+          true,
+          message.detail || "正在加载 Unity WebGL 运行环境，请稍候。",
+          message.title || "正在加载 WebGL 插件"
+        );
+      } else {
+        hideLoadingShieldIfReady();
+      }
     }
     if (message.type === "webgl-preview-cache-status") {
       if (
@@ -743,9 +777,7 @@ function setupFrame() {
 
       if (message.status === "complete" || message.status === "cancelled") {
         state.cacheActive = false;
-        if (state.frameReady) {
-          setLoadingShield(false);
-        }
+        hideLoadingShieldIfReady();
       }
 
       if (message.status === "error") {
@@ -782,12 +814,15 @@ function setupControls() {
 function init() {
   initLocalToken();
   readInitialSceneId();
+  if (elements.version) {
+    elements.version.textContent = `v${WEBGL_PREVIEW_VERSION}`;
+  }
   elements.apiBase.textContent = resolveApiBase();
   setupControls();
   setupFrame();
   window.addEventListener("message", handleHostMessage);
   postPluginReady();
-  setStatus("待运行", "");
+  setStatus("正在加载插件", "busy");
   renderControls();
   log("WebGL 场景运行器已打开。");
 

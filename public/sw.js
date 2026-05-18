@@ -1,12 +1,18 @@
-const WEBGL_PREVIEW_CACHE_VERSION = "2026.05.18.6";
+const WEBGL_PREVIEW_CACHE_VERSION = "2026.05.18.7";
+const WEBGL_PREVIEW_CACHE_PREFIX = "xrugc-webgl-preview-";
 const WEBGL_PREVIEW_CACHE_NAME =
-  "xrugc-webgl-preview-" + WEBGL_PREVIEW_CACHE_VERSION;
+  WEBGL_PREVIEW_CACHE_PREFIX + WEBGL_PREVIEW_CACHE_VERSION;
+const COMPLETE_MARKER_PATH = "__webgl_preview_cache_complete__";
 
-const CACHEABLE_PATHS = [
+const CORE_BUILD_PATHS = [
   "Build/public.loader.js",
   "Build/public.framework.js.gz",
   "Build/public.data.gz",
   "Build/public.wasm.gz",
+];
+
+const CACHEABLE_PATHS = [
+  ...CORE_BUILD_PATHS,
   "TemplateData/style.css",
   "TemplateData/favicon.ico",
 ];
@@ -21,11 +27,28 @@ const WARM_CACHEABLE_PATHS = [
 const CACHEABLE_REQUEST_RE =
   /\/(?:Build\/(?:(?:[a-f0-9]{32}|public)\.(?:loader\.js|framework\.js\.(?:br|gz)|data\.(?:br|gz)|wasm\.(?:br|gz)))|TemplateData\/(?:style\.css|favicon\.ico))(?:[?#]|$)/i;
 
+const CORE_BUILD_REQUEST_RE =
+  /\/Build\/(?:(?:[a-f0-9]{32}|public)\.(?:loader\.js|framework\.js\.(?:br|gz)|data\.(?:br|gz)|wasm\.(?:br|gz)))(?:[?#]|$)/i;
+
+const updateTasks = new Map();
+
 const withVersion = (path) => {
   const url = new URL(path, self.location.href);
   url.searchParams.set("v", WEBGL_PREVIEW_CACHE_VERSION);
   return url.toString();
 };
+
+const stableRequestFor = (requestOrUrl) => {
+  const url = new URL(
+    typeof requestOrUrl === "string" ? requestOrUrl : requestOrUrl.url
+  );
+  return new Request(url.origin + url.pathname, {
+    credentials: "same-origin",
+  });
+};
+
+const markerRequest = () =>
+  new Request(new URL(COMPLETE_MARKER_PATH, self.location.href).toString());
 
 let warmAbortController = null;
 
@@ -46,41 +69,112 @@ self.addEventListener("install", (event) => {
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(
-          keys
-            .filter(
-              (key) =>
-                key.startsWith("xrugc-webgl-preview-") &&
-                key !== WEBGL_PREVIEW_CACHE_NAME
-            )
-            .map((key) => caches.delete(key))
-        )
-      )
-      .then(() => self.clients.claim())
-  );
+  event.waitUntil(self.clients.claim());
 });
 
-const fetchAndCache = async (request) => {
-  const response = await fetch(request);
-  if (response.ok || response.type === "opaque") {
-    caches
-      .open(WEBGL_PREVIEW_CACHE_NAME)
-      .then((cache) => cache.put(request, response.clone()))
-      .catch((error) => {
-        console.warn("[WebPreview] Cache write skipped.", error);
-      });
+const cacheMatchPath = (cache, requestOrUrl) =>
+  cache.match(stableRequestFor(requestOrUrl), { ignoreSearch: true });
+
+const markCacheCompleteIfReady = async (cache) => {
+  const matches = await Promise.all(
+    CORE_BUILD_PATHS.map((path) => cacheMatchPath(cache, withVersion(path)))
+  );
+  if (matches.every(Boolean)) {
+    await cache.put(
+      markerRequest(),
+      new Response(
+        JSON.stringify({
+          version: WEBGL_PREVIEW_CACHE_VERSION,
+          completedAt: new Date().toISOString(),
+        }),
+        {
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+          },
+        }
+      )
+    );
+    return true;
   }
+  return false;
+};
+
+const isCacheComplete = async (cache) => {
+  if (await cache.match(markerRequest())) {
+    return true;
+  }
+  return markCacheCompleteIfReady(cache);
+};
+
+const listPreviewCacheNames = async () =>
+  (await caches.keys())
+    .filter((key) => key.startsWith(WEBGL_PREVIEW_CACHE_PREFIX))
+    .sort()
+    .reverse();
+
+const findCompleteCachedResponse = async (request, options = {}) => {
+  const names = await listPreviewCacheNames();
+  for (const name of names) {
+    if (options.excludeCurrent && name === WEBGL_PREVIEW_CACHE_NAME) {
+      continue;
+    }
+    const cache = await caches.open(name);
+    if (!(await isCacheComplete(cache))) {
+      continue;
+    }
+    const response = await cacheMatchPath(cache, request);
+    if (response) {
+      return response;
+    }
+  }
+  return null;
+};
+
+const cacheResponse = async (request, response) => {
+  if (!response || (!response.ok && response.type !== "opaque")) {
+    return;
+  }
+  const cache = await caches.open(WEBGL_PREVIEW_CACHE_NAME);
+  await cache.put(stableRequestFor(request), response.clone());
+  if (CORE_BUILD_REQUEST_RE.test(new URL(request.url).pathname)) {
+    await markCacheCompleteIfReady(cache);
+  }
+};
+
+const fetchAndCache = async (request, options = {}) => {
+  const response = await fetch(request, options);
+  await cacheResponse(request, response).catch((error) => {
+    console.warn("[WebPreview] Cache write skipped.", error);
+  });
   return response;
+};
+
+const updateCurrentCacheInBackground = (request) => {
+  const key = new URL(request.url).pathname;
+  if (updateTasks.has(key)) {
+    return updateTasks.get(key);
+  }
+  const task = fetchAndCache(
+    new Request(request.url, {
+      cache: "reload",
+      credentials: "same-origin",
+    })
+  )
+    .catch((error) => {
+      console.warn("[WebPreview] Background cache update skipped.", error);
+    })
+    .finally(() => updateTasks.delete(key));
+  updateTasks.set(key, task);
+  return task;
 };
 
 const fetchAndWarmCache = async (cache, request, signal) => {
   const response = await fetch(request, { signal });
   if (response.ok || response.type === "opaque") {
-    await cache.put(request, response.clone());
+    await cache.put(stableRequestFor(request), response.clone());
+    if (CORE_BUILD_REQUEST_RE.test(new URL(request.url).pathname)) {
+      await markCacheCompleteIfReady(cache);
+    }
   }
 };
 
@@ -108,7 +202,7 @@ const warmPreviewCache = async (clientId) => {
         cache: "reload",
         credentials: "same-origin",
       });
-      const cached = await cache.match(request);
+      const cached = await cacheMatchPath(cache, request);
       if (!cached) {
         await postCacheStatus(clientId, {
           status: "fetching",
@@ -175,9 +269,31 @@ self.addEventListener("fetch", (event) => {
   if (!CACHEABLE_REQUEST_RE.test(url.pathname)) return;
 
   event.respondWith(
-    caches
-      .open(WEBGL_PREVIEW_CACHE_NAME)
-      .then((cache) => cache.match(event.request))
-      .then((cached) => cached || fetchAndCache(event.request))
+    (async () => {
+      const currentCache = await caches.open(WEBGL_PREVIEW_CACHE_NAME);
+      const currentCached = await cacheMatchPath(currentCache, event.request);
+      const isCoreBuildRequest = CORE_BUILD_REQUEST_RE.test(url.pathname);
+      const currentComplete = await isCacheComplete(currentCache);
+
+      if (currentCached && (!isCoreBuildRequest || currentComplete)) {
+        event.waitUntil(updateCurrentCacheInBackground(event.request));
+        return currentCached;
+      }
+
+      if (isCoreBuildRequest && !currentComplete) {
+        const previousCompleteResponse = await findCompleteCachedResponse(
+          event.request,
+          {
+            excludeCurrent: true,
+          }
+        );
+        if (previousCompleteResponse) {
+          event.waitUntil(updateCurrentCacheInBackground(event.request));
+          return previousCompleteResponse;
+        }
+      }
+
+      return fetchAndCache(event.request);
+    })()
   );
 });

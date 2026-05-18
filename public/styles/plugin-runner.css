@@ -117,6 +117,21 @@ input {
   background: #174f9d;
 }
 
+.topbar-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.version {
+  color: #66758d;
+  font-family:
+    "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .status {
   min-width: 104px;
   padding: 7px 12px;
@@ -241,5 +256,9 @@ input {
 
   .status {
     width: 100%;
+  }
+
+  .version {
+    display: none;
   }
 }

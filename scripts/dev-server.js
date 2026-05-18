@@ -113,6 +113,7 @@ async function proxyRemoteAsset(req, res, proxyUrl) {
     });
     const headers = {
       'Access-Control-Allow-Origin': '*',
+      'Access-Control-Expose-Headers': 'Accept-Ranges, Content-Length, Content-Range, Content-Type',
       'Cross-Origin-Resource-Policy': 'cross-origin',
     };
 
