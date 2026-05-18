@@ -1,6 +1,7 @@
 .git
 .github
 node_modules
+public/Build
 dist
 coverage
 logs
@@ -19,4 +20,3 @@ Thumbs.db
 *.swp
 *.swo
 *.tsbuildinfo
-

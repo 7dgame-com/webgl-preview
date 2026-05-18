@@ -1,10 +1,9 @@
-FROM nginx:1.19.0-alpine AS prod-stage
+ARG WEBGL_PREVIEW_BASE_IMAGE=hkccr.ccs.tencentyun.com/plugins/webgl-preview:sha-af78e00
+FROM ${WEBGL_PREVIEW_BASE_IMAGE} AS prod-stage
 
 LABEL org.opencontainers.image.title="webgl-preview"
 LABEL org.opencontainers.image.description="Unity WebGL preview plugin for XRUGC"
 LABEL org.opencontainers.image.source="https://github.com/7dgame-com/webgl-preview"
-
-RUN rm -rf /usr/share/nginx/html/*
 
 COPY public /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
