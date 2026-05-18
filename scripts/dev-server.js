@@ -162,6 +162,15 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (url.pathname === '/api/snapshot') {
+    const targetUrl = new URL('https://a2.bujiaban.com/v1/server/snapshot');
+    url.searchParams.forEach((value, key) => {
+      targetUrl.searchParams.append(key, value);
+    });
+    proxyRemoteAsset(req, res, targetUrl.toString());
+    return;
+  }
+
   if (url.pathname === '/health' || url.pathname === '/api/health' || url.pathname === '/plugin/health') {
     sendJson(res, {
       success: true,

@@ -364,9 +364,7 @@ function toUnityPreviewProxyUrl(value, proxyOrigin, assetBaseOrigin) {
       if (VIDEO_PATH_RE.test(absoluteUrl)) {
         return normalizeUnityPreviewVideoUrl(absoluteUrl);
       }
-      return `${proxyOrigin}/__xrugc_proxy__?url=${encodeURIComponent(
-        normalizeUnityPreviewRemoteAssetUrl(absoluteUrl)
-      )}`;
+      return normalizeUnityPreviewRemoteAssetUrl(absoluteUrl);
     }
 
     if (normalizedValue.startsWith("/__xrugc_proxy__")) {
@@ -384,9 +382,7 @@ function toUnityPreviewProxyUrl(value, proxyOrigin, assetBaseOrigin) {
     if (VIDEO_PATH_RE.test(absoluteUrl)) {
       return normalizeUnityPreviewVideoUrl(absoluteUrl);
     }
-    return `${proxyOrigin}/__xrugc_proxy__?url=${encodeURIComponent(
-      normalizeUnityPreviewRemoteAssetUrl(absoluteUrl)
-    )}`;
+    return normalizeUnityPreviewRemoteAssetUrl(absoluteUrl);
   }
 
   try {
@@ -402,9 +398,7 @@ function toUnityPreviewProxyUrl(value, proxyOrigin, assetBaseOrigin) {
     return value;
   }
 
-  return `${proxyOrigin}/__xrugc_proxy__?url=${encodeURIComponent(
-    normalizeUnityPreviewRemoteAssetUrl(normalizedValue)
-  )}`;
+  return normalizeUnityPreviewRemoteAssetUrl(normalizedValue);
 }
 
 function rewriteStringUrls(value, proxyOrigin, assetBaseOrigin) {
@@ -507,7 +501,24 @@ async function requestJsonThroughProxy(url) {
 }
 
 async function requestSnapshot(sceneId) {
-  return requestJsonThroughProxy(resolveSnapshotUrl(sceneId));
+  const url = new URL("/api/snapshot", window.location.origin);
+  url.searchParams.set("expand", SNAPSHOT_EXPAND);
+  url.searchParams.set("verse_id", String(sceneId));
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    credentials: "same-origin",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`API ${response.status}: ${text || response.statusText}`);
+  }
+
+  return unwrapApiData(await response.json());
 }
 
 async function requestLegacyVerse(sceneId, cl) {
