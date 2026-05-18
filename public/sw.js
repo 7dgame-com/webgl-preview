@@ -1,16 +1,18 @@
-const WEBGL_PREVIEW_CACHE_VERSION = "2026.05.18.1";
+const WEBGL_PREVIEW_CACHE_VERSION = "2026.05.18.3";
 const WEBGL_PREVIEW_CACHE_NAME =
   "xrugc-webgl-preview-" + WEBGL_PREVIEW_CACHE_VERSION;
 
 const CACHEABLE_PATHS = [
   "Build/public.loader.js",
   "Build/public.framework.js.gz",
+  "Build/public.data.gz",
+  "Build/public.wasm.gz",
   "TemplateData/style.css",
   "TemplateData/favicon.ico",
 ];
 
 const CACHEABLE_REQUEST_RE =
-  /\/(?:Build\/(?:(?:[a-f0-9]{32}|public)\.(?:loader\.js|framework\.js\.(?:br|gz)))|TemplateData\/(?:style\.css|favicon\.ico))(?:[?#]|$)/i;
+  /\/(?:Build\/(?:(?:[a-f0-9]{32}|public)\.(?:loader\.js|framework\.js\.(?:br|gz)|data\.(?:br|gz)|wasm\.(?:br|gz)))|TemplateData\/(?:style\.css|favicon\.ico))(?:[?#]|$)/i;
 
 const withVersion = (path) => {
   const url = new URL(path, self.location.href);
