@@ -1,9 +1,7 @@
-const WEBGL_PREVIEW_CACHE_VERSION = "2026.05.18.7";
+const WEBGL_PREVIEW_CACHE_VERSION = "2026.05.18.8";
 const WEBGL_PREVIEW_CACHE_PREFIX = "xrugc-webgl-preview-";
 const WEBGL_PREVIEW_CACHE_NAME =
   WEBGL_PREVIEW_CACHE_PREFIX + WEBGL_PREVIEW_CACHE_VERSION;
-const COMPLETE_MARKER_PATH = "__webgl_preview_cache_complete__";
-
 const CORE_BUILD_PATHS = [
   "Build/public.loader.js",
   "Build/public.framework.js.gz",
@@ -30,8 +28,6 @@ const CACHEABLE_REQUEST_RE =
 const CORE_BUILD_REQUEST_RE =
   /\/Build\/(?:(?:[a-f0-9]{32}|public)\.(?:loader\.js|framework\.js\.(?:br|gz)|data\.(?:br|gz)|wasm\.(?:br|gz)))(?:[?#]|$)/i;
 
-const updateTasks = new Map();
-
 const withVersion = (path) => {
   const url = new URL(path, self.location.href);
   url.searchParams.set("v", WEBGL_PREVIEW_CACHE_VERSION);
@@ -46,9 +42,6 @@ const stableRequestFor = (requestOrUrl) => {
     credentials: "same-origin",
   });
 };
-
-const markerRequest = () =>
-  new Request(new URL(COMPLETE_MARKER_PATH, self.location.href).toString());
 
 let warmAbortController = null;
 
@@ -75,37 +68,6 @@ self.addEventListener("activate", (event) => {
 const cacheMatchPath = (cache, requestOrUrl) =>
   cache.match(stableRequestFor(requestOrUrl), { ignoreSearch: true });
 
-const markCacheCompleteIfReady = async (cache) => {
-  const matches = await Promise.all(
-    CORE_BUILD_PATHS.map((path) => cacheMatchPath(cache, withVersion(path)))
-  );
-  if (matches.every(Boolean)) {
-    await cache.put(
-      markerRequest(),
-      new Response(
-        JSON.stringify({
-          version: WEBGL_PREVIEW_CACHE_VERSION,
-          completedAt: new Date().toISOString(),
-        }),
-        {
-          headers: {
-            "content-type": "application/json; charset=utf-8",
-          },
-        }
-      )
-    );
-    return true;
-  }
-  return false;
-};
-
-const isCacheComplete = async (cache) => {
-  if (await cache.match(markerRequest())) {
-    return true;
-  }
-  return markCacheCompleteIfReady(cache);
-};
-
 const listPreviewCacheNames = async () =>
   (await caches.keys())
     .filter((key) => key.startsWith(WEBGL_PREVIEW_CACHE_PREFIX))
@@ -119,9 +81,6 @@ const findCompleteCachedResponse = async (request, options = {}) => {
       continue;
     }
     const cache = await caches.open(name);
-    if (!(await isCacheComplete(cache))) {
-      continue;
-    }
     const response = await cacheMatchPath(cache, request);
     if (response) {
       return response;
@@ -136,9 +95,6 @@ const cacheResponse = async (request, response) => {
   }
   const cache = await caches.open(WEBGL_PREVIEW_CACHE_NAME);
   await cache.put(stableRequestFor(request), response.clone());
-  if (CORE_BUILD_REQUEST_RE.test(new URL(request.url).pathname)) {
-    await markCacheCompleteIfReady(cache);
-  }
 };
 
 const fetchAndCache = async (request, options = {}) => {
@@ -149,32 +105,10 @@ const fetchAndCache = async (request, options = {}) => {
   return response;
 };
 
-const updateCurrentCacheInBackground = (request) => {
-  const key = new URL(request.url).pathname;
-  if (updateTasks.has(key)) {
-    return updateTasks.get(key);
-  }
-  const task = fetchAndCache(
-    new Request(request.url, {
-      cache: "reload",
-      credentials: "same-origin",
-    })
-  )
-    .catch((error) => {
-      console.warn("[WebPreview] Background cache update skipped.", error);
-    })
-    .finally(() => updateTasks.delete(key));
-  updateTasks.set(key, task);
-  return task;
-};
-
 const fetchAndWarmCache = async (cache, request, signal) => {
   const response = await fetch(request, { signal });
   if (response.ok || response.type === "opaque") {
     await cache.put(stableRequestFor(request), response.clone());
-    if (CORE_BUILD_REQUEST_RE.test(new URL(request.url).pathname)) {
-      await markCacheCompleteIfReady(cache);
-    }
   }
 };
 
@@ -273,14 +207,12 @@ self.addEventListener("fetch", (event) => {
       const currentCache = await caches.open(WEBGL_PREVIEW_CACHE_NAME);
       const currentCached = await cacheMatchPath(currentCache, event.request);
       const isCoreBuildRequest = CORE_BUILD_REQUEST_RE.test(url.pathname);
-      const currentComplete = await isCacheComplete(currentCache);
 
-      if (currentCached && (!isCoreBuildRequest || currentComplete)) {
-        event.waitUntil(updateCurrentCacheInBackground(event.request));
+      if (currentCached) {
         return currentCached;
       }
 
-      if (isCoreBuildRequest && !currentComplete) {
+      if (isCoreBuildRequest) {
         const previousCompleteResponse = await findCompleteCachedResponse(
           event.request,
           {
@@ -288,7 +220,7 @@ self.addEventListener("fetch", (event) => {
           }
         );
         if (previousCompleteResponse) {
-          event.waitUntil(updateCurrentCacheInBackground(event.request));
+          event.waitUntil(cacheResponse(event.request, previousCompleteResponse.clone()));
           return previousCompleteResponse;
         }
       }

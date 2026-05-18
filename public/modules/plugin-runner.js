@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.18.7";
+const WEBGL_PREVIEW_VERSION = "2026.05.18.8";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -22,6 +22,7 @@ const state = {
   stopped: false,
   running: false,
   busy: false,
+  sceneLoading: false,
   cacheActive: false,
 };
 
@@ -83,7 +84,7 @@ function setLoadingShield(visible, detail, title) {
 }
 
 function hideLoadingShieldIfReady() {
-  if (!state.cacheActive && state.frameReady && !state.busy) {
+  if (!state.cacheActive && state.frameReady && !state.busy && !state.sceneLoading) {
     setLoadingShield(false);
   }
 }
@@ -635,6 +636,7 @@ async function runScene() {
     state.stopped = false;
   }
   state.running = true;
+  state.sceneLoading = true;
   setControlsBusy(true);
   setStatus("读取场景中", "busy");
   setLoadingShield(true, `正在读取场景 ${sceneId}，请稍候。`, "正在加载场景");
@@ -654,9 +656,9 @@ async function runScene() {
     setStatus("发送到 Unity", "busy");
     setLoadingShield(true, "场景数据已读取完成，正在发送到 Unity。", "正在启动场景");
     sendPayloadToUnity(payload);
-    setStatus("运行中", "ready");
   } catch (error) {
     state.running = false;
+    state.sceneLoading = false;
     setStatus("运行失败", "error");
     setLoadingShield(false);
     log(error instanceof Error ? error.message : String(error));
@@ -694,6 +696,7 @@ function stopScene() {
   state.pendingRun = false;
   state.frameReady = false;
   state.running = false;
+  state.sceneLoading = false;
   elements.frame.src = "about:blank";
   setStatus("已停止", "");
   setLoadingShield(false);
@@ -722,20 +725,13 @@ function setupFrame() {
     if (state.stopped || elements.frame.src === "about:blank") {
       return;
     }
-    state.frameReady = true;
     log("Unity iframe 已加载。");
-    if (state.payload) {
-      sendPayloadToUnity(state.payload);
-    }
   });
 
   window.addEventListener("message", (event) => {
     const message = event.data || {};
     if (message.type === "unity-web-preview-ready") {
       state.frameReady = true;
-      if (!state.cacheActive) {
-        setLoadingShield(false);
-      }
       log("Unity runner 已就绪。");
       if (!state.running) {
         setStatus("请输入场景号", "ready");
@@ -743,8 +739,12 @@ function setupFrame() {
       if (state.payload) {
         sendPayloadToUnity(state.payload);
       }
+      hideLoadingShieldIfReady();
     }
     if (message.type === "unity-web-preview-scene-forwarded") {
+      state.sceneLoading = false;
+      setStatus("运行中", "ready");
+      hideLoadingShieldIfReady();
       log("Unity runner 已接收场景。", { length: message.length });
     }
     if (message.type === "webgl-preview-loading") {
