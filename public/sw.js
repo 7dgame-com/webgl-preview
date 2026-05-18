@@ -1,4 +1,4 @@
-const WEBGL_PREVIEW_CACHE_VERSION = "2026.05.18.3";
+const WEBGL_PREVIEW_CACHE_VERSION = "2026.05.18.4";
 const WEBGL_PREVIEW_CACHE_NAME =
   "xrugc-webgl-preview-" + WEBGL_PREVIEW_CACHE_VERSION;
 
@@ -18,6 +18,19 @@ const withVersion = (path) => {
   const url = new URL(path, self.location.href);
   url.searchParams.set("v", WEBGL_PREVIEW_CACHE_VERSION);
   return url.toString();
+};
+
+let warmAbortController = null;
+
+const postCacheStatus = async (clientId, payload) => {
+  if (!clientId) return;
+  const client = await self.clients.get(clientId).catch(() => null);
+  if (!client) return;
+  client.postMessage({
+    type: "webgl-preview-cache-status",
+    version: WEBGL_PREVIEW_CACHE_VERSION,
+    ...payload,
+  });
 };
 
 self.addEventListener("install", (event) => {
@@ -57,23 +70,95 @@ const fetchAndCache = async (request) => {
   return response;
 };
 
-const warmPreviewCache = async () => {
+const fetchAndWarmCache = async (cache, request, signal) => {
+  const response = await fetch(request, { signal });
+  if (response.ok || response.type === "opaque") {
+    await cache.put(request, response.clone());
+  }
+};
+
+const warmPreviewCache = async (clientId) => {
+  if (warmAbortController) {
+    warmAbortController.abort();
+  }
+
+  const abortController = new AbortController();
+  warmAbortController = abortController;
   const cache = await caches.open(WEBGL_PREVIEW_CACHE_NAME);
-  await Promise.allSettled(
-    CACHEABLE_PATHS.map(async (path) => {
+  const total = CACHEABLE_PATHS.length;
+
+  await postCacheStatus(clientId, {
+    status: "started",
+    completed: 0,
+    total,
+    path: "",
+  });
+
+  try {
+    for (let index = 0; index < CACHEABLE_PATHS.length; index += 1) {
+      const path = CACHEABLE_PATHS[index];
       const request = new Request(withVersion(path), {
         cache: "reload",
         credentials: "same-origin",
       });
-      if (await cache.match(request)) return;
-      await fetchAndCache(request);
-    })
-  );
+      const cached = await cache.match(request);
+      if (!cached) {
+        await postCacheStatus(clientId, {
+          status: "fetching",
+          completed: index,
+          total,
+          path,
+        });
+        await fetchAndWarmCache(cache, request, abortController.signal);
+      }
+      await postCacheStatus(clientId, {
+        status: "progress",
+        completed: index + 1,
+        total,
+        path,
+      });
+    }
+
+    await postCacheStatus(clientId, {
+      status: "complete",
+      completed: total,
+      total,
+      path: "",
+    });
+  } catch (error) {
+    if (abortController.signal.aborted) {
+      await postCacheStatus(clientId, {
+        status: "cancelled",
+        completed: 0,
+        total,
+        path: "",
+      });
+      return;
+    }
+
+    await postCacheStatus(clientId, {
+      status: "error",
+      completed: 0,
+      total,
+      path: "",
+      message: error && error.message ? error.message : String(error),
+    });
+  } finally {
+    if (warmAbortController === abortController) {
+      warmAbortController = null;
+    }
+  }
 };
 
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "warm-webgl-preview-cache") {
-    event.waitUntil(warmPreviewCache());
+    event.waitUntil(warmPreviewCache(event.source && event.source.id));
+  }
+
+  if (event.data && event.data.type === "cancel-webgl-preview-cache") {
+    if (warmAbortController) {
+      warmAbortController.abort();
+    }
   }
 });
 

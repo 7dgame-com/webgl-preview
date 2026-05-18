@@ -21,6 +21,7 @@ const state = {
   stopped: false,
   running: false,
   busy: false,
+  cacheActive: false,
 };
 
 const elements = {
@@ -40,6 +41,9 @@ const elements = {
   luaLength: document.querySelector("[data-lua-length]"),
   log: document.querySelector("[data-log]"),
   frame: document.querySelector("[data-frame]"),
+  loadingShield: document.querySelector("[data-loading-shield]"),
+  loadingTitle: document.querySelector("[data-loading-title]"),
+  loadingDetail: document.querySelector("[data-loading-detail]"),
 };
 
 function genId(prefix) {
@@ -59,13 +63,21 @@ function setStatus(text, tone) {
 
 function renderControls() {
   const isActive = state.busy || state.running;
+  const isLoading = !elements.loadingShield.hidden;
   elements.sceneField.hidden = isActive;
   elements.run.hidden = isActive;
   elements.stop.hidden = !isActive;
   elements.reload.hidden = !isActive;
-  elements.run.disabled = state.busy;
-  elements.stop.disabled = state.busy && state.stopped;
-  elements.reload.disabled = state.busy;
+  elements.run.disabled = state.busy || isLoading;
+  elements.stop.disabled = (state.busy && state.stopped) || isLoading;
+  elements.reload.disabled = state.busy || isLoading;
+}
+
+function setLoadingShield(visible, detail, title) {
+  elements.loadingShield.hidden = !visible;
+  if (title) elements.loadingTitle.textContent = title;
+  if (detail) elements.loadingDetail.textContent = detail;
+  renderControls();
 }
 
 function setControlsBusy(isBusy) {
@@ -680,6 +692,12 @@ function rerunScene() {
 }
 
 function setupFrame() {
+  setLoadingShield(
+    true,
+    "正在加载 Unity WebGL 运行环境，请勿切换场景或重复点击。",
+    "正在加载 WebGL 插件"
+  );
+
   elements.frame.addEventListener("load", () => {
     if (state.stopped || elements.frame.src === "about:blank") {
       return;
@@ -695,6 +713,9 @@ function setupFrame() {
     const message = event.data || {};
     if (message.type === "unity-web-preview-ready") {
       state.frameReady = true;
+      if (!state.cacheActive) {
+        setLoadingShield(false);
+      }
       log("Unity runner 已就绪。");
       if (state.payload) {
         sendPayloadToUnity(state.payload);
@@ -702,6 +723,36 @@ function setupFrame() {
     }
     if (message.type === "unity-web-preview-scene-forwarded") {
       log("Unity runner 已接收场景。", { length: message.length });
+    }
+    if (message.type === "webgl-preview-cache-status") {
+      if (
+        message.status === "started" ||
+        message.status === "fetching" ||
+        message.status === "progress"
+      ) {
+        state.cacheActive = true;
+        const completed = Number(message.completed || 0);
+        const total = Number(message.total || 0);
+        const path = message.path ? `：${message.path}` : "";
+        setLoadingShield(
+          true,
+          `正在缓存插件资源 ${completed}/${total}${path}。首次加载会较慢，请勿退出或重复操作。`,
+          "正在缓存 WebGL 插件"
+        );
+      }
+
+      if (message.status === "complete" || message.status === "cancelled") {
+        state.cacheActive = false;
+        if (state.frameReady) {
+          setLoadingShield(false);
+        }
+      }
+
+      if (message.status === "error") {
+        state.cacheActive = false;
+        setLoadingShield(false);
+        log("插件缓存失败，将继续尝试直接加载。", { message: message.message });
+      }
     }
   });
   loadUnityFrame();

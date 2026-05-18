@@ -7,7 +7,7 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <title>WebGL</title>
-    <link rel="stylesheet" href="./styles/plugin-runner.css?v=2026.05.15.10" />
+    <link rel="stylesheet" href="./styles/plugin-runner.css?v=2026.05.18.4" />
   </head>
   <body>
     <main class="app-shell">
@@ -46,6 +46,14 @@
           data-frame
           allow="fullscreen; clipboard-read; clipboard-write"
         ></iframe>
+        <div class="loading-shield" data-loading-shield>
+          <div class="loading-panel" role="status" aria-live="polite">
+            <div class="loading-title" data-loading-title>正在加载 WebGL 插件</div>
+            <div class="loading-detail" data-loading-detail>
+              正在准备 Unity 运行环境，请稍候。
+            </div>
+          </div>
+        </div>
       </section>
 
       <section hidden aria-hidden="true">
@@ -61,6 +69,6 @@
       </section>
     </main>
 
-    <script type="module" src="./modules/plugin-runner.js?v=2026.05.18.3"></script>
+    <script type="module" src="./modules/plugin-runner.js?v=2026.05.18.4"></script>
   </body>
 </html>

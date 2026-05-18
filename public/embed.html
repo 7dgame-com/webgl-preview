@@ -5,7 +5,7 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Unity Web Player | Web Preview</title>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
-    <link rel="stylesheet" href="TemplateData/style.css?v=2026.05.14.2">
+    <link rel="stylesheet" href="TemplateData/style.css?v=2026.05.18.4">
   </head>
   <body>
     <div id="unity-container" class="unity-desktop">
@@ -22,9 +22,38 @@
         <div id="unity-fullscreen-button"></div>
         <div id="unity-build-title">Web Preview</div>
       </div>
+      <div id="web-preview-loading-shield">
+        <div id="web-preview-loading-panel">
+          <div id="web-preview-loading-title">正在加载 WebGL 插件</div>
+          <div id="web-preview-loading-detail">正在准备 Unity 运行环境，请稍候。</div>
+        </div>
+      </div>
     </div>
     <script>
       var canvas = document.querySelector("#unity-canvas");
+      var loadingShield = document.querySelector("#web-preview-loading-shield");
+      var loadingTitle = document.querySelector("#web-preview-loading-title");
+      var loadingDetail = document.querySelector("#web-preview-loading-detail");
+      var webPreviewCacheActive = false;
+      var webPreviewUnityReady = false;
+
+      function setWebPreviewLoading(visible, detail, title) {
+        if (title) {
+          loadingTitle.textContent = title;
+        }
+        if (detail) {
+          loadingDetail.textContent = detail;
+        }
+        loadingShield.style.display = visible ? "grid" : "none";
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({
+            type: "webgl-preview-loading",
+            visible: !!visible,
+            title: loadingTitle.textContent,
+            detail: loadingDetail.textContent
+          }, "*");
+        }
+      }
 
       // Shows a temporary message banner/ribbon for a few seconds, or
       // a permanent error message on top of the canvas if type=='error'.
@@ -51,12 +80,26 @@
         updateBannerVisibility();
       }
 
-      var webPreviewBuildCacheVersion = "2026.05.18.3";
+      var webPreviewBuildCacheVersion = "2026.05.18.4";
       var buildUrl = "Build";
       function withBuildCacheVersion(url) {
         var nextUrl = new URL(url, window.location.href);
         nextUrl.searchParams.set("v", webPreviewBuildCacheVersion);
         return nextUrl.toString();
+      }
+
+      function postCacheStatusToParent(message) {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage(message, "*");
+        }
+      }
+
+      function cancelWebPreviewCache() {
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({
+            type: "cancel-webgl-preview-cache"
+          });
+        }
       }
 
       function warmWebPreviewCache() {
@@ -67,6 +110,46 @@
         if (!("serviceWorker" in navigator)) {
           return;
         }
+
+        navigator.serviceWorker.addEventListener("message", function(event) {
+          var message = event.data || {};
+          if (message.type !== "webgl-preview-cache-status") {
+            return;
+          }
+
+          postCacheStatusToParent(message);
+          if (
+            message.status === "started" ||
+            message.status === "fetching" ||
+            message.status === "progress"
+          ) {
+            webPreviewCacheActive = true;
+            var completed = Number(message.completed || 0);
+            var total = Number(message.total || 0);
+            var path = message.path ? "：" + message.path : "";
+            setWebPreviewLoading(
+              true,
+              "正在缓存插件资源 " + completed + "/" + total + path + "。首次加载会较慢，请勿退出或重复操作。",
+              "正在缓存 WebGL 插件"
+            );
+          }
+
+          if (message.status === "complete" || message.status === "cancelled") {
+            webPreviewCacheActive = false;
+            if (webPreviewUnityReady) {
+              setWebPreviewLoading(false);
+            }
+          }
+
+          if (message.status === "error") {
+            webPreviewCacheActive = false;
+            console.warn("[WebPreview] Service worker cache warm failed.", message.message);
+            setWebPreviewLoading(false);
+          }
+        });
+
+        window.addEventListener("pagehide", cancelWebPreviewCache);
+        window.addEventListener("beforeunload", cancelWebPreviewCache);
 
         navigator.serviceWorker.register(new URL("sw.js", window.location.href).toString(), {
           scope: new URL(".", window.location.href).toString()
@@ -400,15 +483,11 @@
             if (parsed.origin === window.location.origin) {
               return url;
             }
-
-            if (VIDEO_PATH_RE.test(parsed.pathname)) {
-              return normalizeVideoUrl(url);
-            }
           } catch (error) {
             return url;
           }
 
-          return getProxyOrigin() + "/__xrugc_proxy__?url=" + encodeURIComponent(url);
+          return getProxyOrigin() + "/__xrugc_proxy__?url=" + normalizeRemoteAssetUrl(url);
         }
 
         function normalizeVideoUrl(value) {
@@ -567,6 +646,10 @@
           document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
               }).then((unityInstance) => {
                 document.querySelector("#unity-loading-bar").style.display = "none";
+                webPreviewUnityReady = true;
+                if (!webPreviewCacheActive) {
+                  setWebPreviewLoading(false);
+                }
                 document.querySelector("#unity-fullscreen-button").onclick = () => {
                   unityInstance.SetFullscreen(1);
                 };
