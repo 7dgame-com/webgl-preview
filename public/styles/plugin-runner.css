@@ -33,6 +33,7 @@ input {
 }
 
 .app-shell {
+  position: relative;
   width: 100vw;
   height: 100vh;
   display: grid;
@@ -41,6 +42,7 @@ input {
 }
 
 .topbar {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(260px, 1fr) auto minmax(260px, 1fr);
   align-items: center;
@@ -52,6 +54,8 @@ input {
 }
 
 .controls {
+  position: relative;
+  z-index: 2;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -118,28 +122,39 @@ input {
 }
 
 .topbar-meta {
-  grid-column: 2;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
+  pointer-events: none;
 }
 
 .version {
-  color: #66758d;
+  position: fixed;
+  right: 14px;
+  bottom: 10px;
+  z-index: 20;
+  padding: 4px 8px;
+  border-radius: 5px;
+  background: rgba(17, 24, 39, 0.48);
+  color: rgba(226, 232, 240, 0.92);
   font-family:
     "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 12px;
   white-space: nowrap;
+  pointer-events: none;
 }
 
 .status {
   min-width: 220px;
   padding: 9px 20px;
-  border: 1px solid #d4dce8;
+  border: 1px solid #cfd9e7;
   border-radius: 6px;
-  background: #f9fbfd;
-  color: #58667b;
+  background: #f8fafc;
+  color: #475569;
   font-size: 17px;
   font-weight: 750;
   line-height: 1.1;
@@ -148,22 +163,31 @@ input {
 }
 
 .status[data-tone="ready"] {
+  border-color: #83caa4;
+  background: #ecfdf5;
+  color: #047857;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14);
+}
+
+.status[data-tone="busy"] {
+  border-color: #f0c267;
+  background: #fffbeb;
+  color: #a16207;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.12);
+}
+
+.status[data-tone="running"] {
   border-color: #7eb1f1;
   background: #eaf4ff;
   color: #145aa8;
   box-shadow: 0 0 0 3px rgba(56, 119, 213, 0.12);
 }
 
-.status[data-tone="busy"] {
-  border-color: #a8c9f3;
-  background: #eef6ff;
-  color: #245b96;
-}
-
 .status[data-tone="error"] {
   border-color: #f0b4b4;
   background: #fff1f1;
   color: #a13b3b;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
 }
 
 .viewer {
@@ -269,6 +293,7 @@ input {
   }
 
   .topbar-meta {
+    position: static;
     grid-column: 1;
     order: -1;
   }
@@ -292,6 +317,7 @@ input {
   }
 
   .version {
-    display: none;
+    right: 8px;
+    bottom: 8px;
   }
 }

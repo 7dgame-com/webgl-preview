@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.19.4";
+const WEBGL_PREVIEW_VERSION = "2026.05.19.5";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -827,7 +827,7 @@ function setupFrame() {
     }
     if (message.type === "unity-web-preview-scene-forwarded") {
       state.sceneLoading = false;
-      setStatus("运行中", "ready");
+      setStatus("运行中", "running");
       hideLoadingShieldIfReady();
       log("Unity runner 已接收场景。", { length: message.length });
     }
