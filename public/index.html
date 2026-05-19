@@ -7,7 +7,7 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <title>WebGL</title>
-    <link rel="stylesheet" href="./styles/plugin-runner.css?v=2026.05.19.16" />
+    <link rel="stylesheet" href="./styles/plugin-runner.css?v=2026.05.19.17" />
   </head>
   <body>
     <main class="app-shell">
@@ -50,6 +50,17 @@
           data-frame
           allow="fullscreen; clipboard-read; clipboard-write"
         ></iframe>
+        <button
+          class="fullscreen-button"
+          type="button"
+          data-fullscreen
+          title="全屏预览"
+          aria-label="全屏预览"
+          data-i18n-title="fullscreenPreview"
+          data-i18n-aria-label="fullscreenPreview"
+        >
+          ⛶
+        </button>
         <div class="idle-hint" data-idle-hint aria-hidden="true">
           <div class="idle-stack">
             <div class="status" data-status>待运行</div>
@@ -85,6 +96,6 @@
       </section>
     </main>
 
-    <script type="module" src="./modules/plugin-runner.js?v=2026.05.19.16"></script>
+    <script type="module" src="./modules/plugin-runner.js?v=2026.05.19.17"></script>
   </body>
 </html>

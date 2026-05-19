@@ -244,7 +244,8 @@ input {
   min-width: 0;
   min-height: 0;
   display: grid;
-  background: #2d3b4c;
+  padding: 12px;
+  background: #eaf1f8;
 }
 
 .preview-frame {
@@ -253,18 +254,53 @@ input {
   min-width: 0;
   min-height: 0;
   border: 0;
+  border-radius: 12px;
   display: block;
+  overflow: hidden;
   background: #2d3b4c;
+}
+
+.fullscreen-button {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 9;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(215, 225, 238, 0.86);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #52647a;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  line-height: 1;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.14);
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.fullscreen-button:hover {
+  border-color: #b6c8dc;
+  background: #ffffff;
+  color: #263b55;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.18);
 }
 
 .idle-hint {
   position: absolute;
-  inset: 0;
+  inset: 12px;
   z-index: 6;
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: none;
+  border-radius: 12px;
   background: #101821;
 }
 
@@ -316,6 +352,25 @@ input {
   transition: width 0.18s ease;
 }
 
+.loading-progress[data-mode="indeterminate"] .loading-progress-bar {
+  width: 42%;
+  animation: loading-progress-sweep 1.15s ease-in-out infinite;
+}
+
+.loading-progress[data-mode="indeterminate"] .loading-progress-text {
+  display: none;
+}
+
+@keyframes loading-progress-sweep {
+  0% {
+    transform: translateX(-115%);
+  }
+
+  100% {
+    transform: translateX(245%);
+  }
+}
+
 .loading-progress-text {
   color: #c9d7e8;
   font-family:
@@ -326,7 +381,7 @@ input {
 
 .loading-shield {
   position: absolute;
-  inset: 0;
+  inset: 12px;
   z-index: 12;
   background: transparent;
   cursor: wait;

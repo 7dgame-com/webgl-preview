@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.19.16";
+const WEBGL_PREVIEW_VERSION = "2026.05.19.17";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -17,6 +17,7 @@ const I18N = {
   zh: {
     topbarLabel: "WebGL 控制栏",
     viewerLabel: "Unity WebGL 预览",
+    fullscreenPreview: "全屏预览",
     sceneIdLabel: "场景号",
     sceneIdPlaceholder: "请输入场景号：例如1416",
     run: "运行",
@@ -65,6 +66,7 @@ const I18N = {
   en: {
     topbarLabel: "WebGL controls",
     viewerLabel: "Unity WebGL preview",
+    fullscreenPreview: "Fullscreen preview",
     sceneIdLabel: "Scene ID",
     sceneIdPlaceholder: "Enter scene ID: e.g. 1416",
     run: "Run",
@@ -137,6 +139,7 @@ const elements = {
   run: document.querySelector("[data-run]"),
   stop: document.querySelector("[data-stop]"),
   reload: document.querySelector("[data-reload]"),
+  fullscreen: document.querySelector("[data-fullscreen]"),
   tokenInput: document.querySelector("[data-token-input]"),
   saveToken: document.querySelector("[data-save-token]"),
   tokenState: document.querySelector("[data-token-state]"),
@@ -184,6 +187,9 @@ function applyI18n() {
   });
   document.querySelectorAll("[data-i18n-aria-label]").forEach((node) => {
     node.setAttribute("aria-label", t(node.dataset.i18nAriaLabel));
+  });
+  document.querySelectorAll("[data-i18n-title]").forEach((node) => {
+    node.setAttribute("title", t(node.dataset.i18nTitle));
   });
   if (elements.tokenState) {
     elements.tokenState.textContent = state.token ? t("configured") : t("notConfigured");
@@ -256,17 +262,18 @@ function setStatus(text, tone) {
   elements.status.dataset.tone = tone || "";
 }
 
-function setLoadingProgress(percentText) {
+function setLoadingProgress(percentText, { indeterminate = false } = {}) {
   const match = String(percentText || "").match(/(\d{1,3})%/);
   const percent = match ? Math.max(0, Math.min(100, Number(match[1]))) : 0;
-  elements.loadingProgress.hidden = elements.loadingShield.hidden;
+  elements.loadingProgress.dataset.mode = indeterminate ? "indeterminate" : "";
+  elements.loadingProgress.hidden = elements.loadingShield.hidden && !state.sceneResourceLoading;
   elements.loadingProgressBar.style.width = `${percent}%`;
   elements.loadingProgressText.textContent = `${percent}%`;
 }
 
 function renderControls() {
   const isActive = state.busy || state.running;
-  const isLoading = !elements.loadingShield.hidden;
+  const isLoading = !elements.loadingShield.hidden || state.sceneResourceLoading;
   if (elements.idleHint) {
     elements.idleHint.hidden =
       state.running && !state.sceneLoading && !state.sceneResourceLoading && !isLoading;
@@ -291,9 +298,12 @@ function setLoadingShield(visible, detail, title) {
     setStatus(title || t("loadingPlugin"), "busy");
     setLoadingProgress(detail || "");
   } else {
-    elements.loadingProgress.hidden = true;
-    elements.loadingProgressBar.style.width = "0%";
-    elements.loadingProgressText.textContent = "0%";
+    if (!state.sceneResourceLoading) {
+      elements.loadingProgress.hidden = true;
+      elements.loadingProgressBar.style.width = "0%";
+      elements.loadingProgressText.textContent = "0%";
+      elements.loadingProgress.dataset.mode = "";
+    }
   }
   renderControls();
 }
@@ -1063,6 +1073,7 @@ function setupFrame() {
       state.sceneLoading = false;
       state.sceneResourceLoading = true;
       setStatus(t("sceneResourceLoading"), "busy");
+      setLoadingProgress("", { indeterminate: true });
       hideLoadingShieldIfReady();
       log(t("runnerAccepted"), { length: message.length });
     }
@@ -1071,6 +1082,7 @@ function setupFrame() {
         return;
       }
       state.sceneResourceLoading = false;
+      setLoadingProgress("0%");
       setStatus(t("running"), "running");
       hideLoadingShieldIfReady();
       renderControls();
@@ -1120,10 +1132,23 @@ function setupFrame() {
   loadUnityFrame();
 }
 
+function toggleFullscreenPreview() {
+  const target = document.querySelector(".viewer");
+  if (!target) return;
+  if (document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {});
+    return;
+  }
+  if (target.requestFullscreen) {
+    target.requestFullscreen().catch(() => {});
+  }
+}
+
 function setupControls() {
   elements.run.addEventListener("click", runScene);
   elements.stop.addEventListener("click", stopScene);
   elements.reload.addEventListener("click", rerunScene);
+  elements.fullscreen.addEventListener("click", toggleFullscreenPreview);
   elements.saveToken.addEventListener("click", () => {
     setToken(elements.tokenInput.value, { persist: true });
     log(state.token ? t("tokenSaved") : t("tokenCleared"));
