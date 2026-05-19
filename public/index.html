@@ -7,7 +7,7 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <title>WebGL</title>
-    <link rel="stylesheet" href="./styles/plugin-runner.css?v=2026.05.19.6" />
+    <link rel="stylesheet" href="./styles/plugin-runner.css?v=2026.05.19.8" />
   </head>
   <body>
     <main class="app-shell">
@@ -26,14 +26,17 @@
             />
           </label>
 
-          <button class="button button-primary" type="button" data-run data-i18n="run">
-            运行
+          <button class="button button-primary" type="button" data-run>
+            <span class="button-icon" aria-hidden="true">+</span>
+            <span data-i18n="run">运行</span>
           </button>
-          <button class="button" type="button" data-stop data-i18n="stop" hidden>
-            停止
+          <button class="button" type="button" data-stop hidden>
+            <span class="button-icon" aria-hidden="true">■</span>
+            <span data-i18n="stop">停止</span>
           </button>
-          <button class="button" type="button" data-reload data-i18n="rerun" hidden>
-            重跑
+          <button class="button" type="button" data-reload hidden>
+            <span class="button-icon" aria-hidden="true">↻</span>
+            <span data-i18n="rerun">重跑</span>
           </button>
         </div>
 
@@ -76,6 +79,6 @@
       </section>
     </main>
 
-    <script type="module" src="./modules/plugin-runner.js?v=2026.05.19.6"></script>
+    <script type="module" src="./modules/plugin-runner.js?v=2026.05.19.8"></script>
   </body>
 </html>

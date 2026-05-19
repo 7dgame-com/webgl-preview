@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.19.6";
+const WEBGL_PREVIEW_VERSION = "2026.05.19.8";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -123,6 +123,7 @@ const state = {
   cacheActive: false,
   frameSession: "",
   runSerial: 0,
+  locale: "zh",
 };
 
 const elements = {
@@ -149,24 +150,26 @@ const elements = {
   loadingDetail: document.querySelector("[data-loading-detail]"),
 };
 
-function resolveLocale() {
-  const lang = (readQuery().get("lang") || navigator.language || "zh-CN")
+function normalizeLocale(value) {
+  const lang = (value || navigator.language || "zh-CN")
     .toLowerCase()
     .replace("_", "-");
   return lang.startsWith("zh") ? "zh" : "en";
 }
 
-const locale = resolveLocale();
+function resolveLocale() {
+  return normalizeLocale(readQuery().get("lang"));
+}
 
 function t(key, params = {}) {
-  const template = I18N[locale][key] || I18N.zh[key] || key;
+  const template = I18N[state.locale][key] || I18N.zh[key] || key;
   return template.replace(/\{(\w+)\}/g, (_, name) =>
     Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : ""
   );
 }
 
 function applyI18n() {
-  document.documentElement.lang = locale === "zh" ? "zh-CN" : "en";
+  document.documentElement.lang = state.locale === "zh" ? "zh-CN" : "en";
   document.querySelectorAll("[data-i18n]").forEach((node) => {
     node.textContent = t(node.dataset.i18n);
   });
@@ -176,6 +179,55 @@ function applyI18n() {
   document.querySelectorAll("[data-i18n-aria-label]").forEach((node) => {
     node.setAttribute("aria-label", t(node.dataset.i18nAriaLabel));
   });
+  if (elements.tokenState) {
+    elements.tokenState.textContent = state.token ? t("configured") : t("notConfigured");
+  }
+}
+
+function refreshStatusForLocale() {
+  if (state.sceneLoading) {
+    setStatus(t("readingScene"), "busy");
+    return;
+  }
+  if (state.running) {
+    setStatus(t("running"), "running");
+    return;
+  }
+  if (state.busy || state.cacheActive || !state.frameReady) {
+    setStatus(t("loadingPlugin"), "busy");
+    return;
+  }
+  setStatus(t("enterSceneId"), "ready");
+}
+
+function extractLocaleCandidate(value) {
+  if (!value || typeof value !== "object") return "";
+  const direct =
+    value.lang ||
+    value.language ||
+    value.locale ||
+    value.currentLang ||
+    value.currentLanguage;
+  if (typeof direct === "string") return direct;
+  if (value.config && typeof value.config === "object") {
+    return extractLocaleCandidate(value.config);
+  }
+  if (value.payload && typeof value.payload === "object") {
+    return extractLocaleCandidate(value.payload);
+  }
+  return "";
+}
+
+function updateLocale(nextLang) {
+  const nextLocale = normalizeLocale(nextLang || readQuery().get("lang"));
+  if (nextLocale === state.locale) return false;
+  state.locale = nextLocale;
+  applyI18n();
+  refreshStatusForLocale();
+  if (!elements.loadingShield.hidden) {
+    setLoadingShield(true, t("loadingPluginFallback"), t("loadingPlugin"));
+  }
+  return true;
 }
 
 function genId(prefix) {
@@ -381,7 +433,9 @@ function postPluginReady() {
 function handleHostMessage(event) {
   if (window.parent && event.source !== window.parent) return;
   const message = event.data || {};
-  if (!message || typeof message.type !== "string") return;
+  if (!message || typeof message !== "object") return;
+  updateLocale(extractLocaleCandidate(message));
+  if (typeof message.type !== "string") return;
 
   if (message.type === "INIT") {
     const payload = message.payload || {};
@@ -393,6 +447,19 @@ function handleHostMessage(event) {
       setStatus(t("enterSceneId"), "ready");
     }
     log(t("hostInit"));
+  }
+
+  if (
+    message.type === "LANGUAGE_CHANGE" ||
+    message.type === "LOCALE_CHANGE" ||
+    message.type === "SET_LANGUAGE" ||
+    message.type === "SET_LOCALE" ||
+    message.type === "CHANGE_LANGUAGE" ||
+    message.type === "CHANGE_LOCALE" ||
+    message.type === "LANG_CHANGE" ||
+    message.type === "I18N_CHANGE"
+  ) {
+    updateLocale(extractLocaleCandidate(message));
   }
 
   if (message.type === "TOKEN_UPDATE") {
@@ -1026,7 +1093,35 @@ function setupControls() {
   });
 }
 
+function setupLocaleSync() {
+  let lastSearch = window.location.search;
+  const syncFromUrl = () => {
+    if (window.location.search === lastSearch) return;
+    lastSearch = window.location.search;
+    updateLocale(readQuery().get("lang"));
+  };
+
+  window.addEventListener("popstate", syncFromUrl);
+  window.addEventListener("hashchange", syncFromUrl);
+  window.addEventListener("focus", syncFromUrl);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) syncFromUrl();
+  });
+
+  const patchHistory = (name) => {
+    const original = window.history[name];
+    window.history[name] = function patchedHistoryState(...args) {
+      const result = original.apply(this, args);
+      syncFromUrl();
+      return result;
+    };
+  };
+  patchHistory("pushState");
+  patchHistory("replaceState");
+}
+
 function init() {
+  state.locale = resolveLocale();
   applyI18n();
   initLocalToken();
   readInitialSceneId();
@@ -1035,6 +1130,7 @@ function init() {
   }
   elements.apiBase.textContent = resolveApiBase();
   setupControls();
+  setupLocaleSync();
   setupFrame();
   window.addEventListener("message", handleHostMessage);
   postPluginReady();
