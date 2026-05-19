@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.19.13";
+const WEBGL_PREVIEW_VERSION = "2026.05.19.14";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -18,7 +18,7 @@ const I18N = {
     topbarLabel: "WebGL 控制栏",
     viewerLabel: "Unity WebGL 预览",
     sceneIdLabel: "场景号",
-    sceneIdPlaceholder: "例如 1416",
+    sceneIdPlaceholder: "请输入场景号：例如1416",
     run: "运行",
     stop: "停止",
     rerun: "重跑",
@@ -65,7 +65,7 @@ const I18N = {
     topbarLabel: "WebGL controls",
     viewerLabel: "Unity WebGL preview",
     sceneIdLabel: "Scene ID",
-    sceneIdPlaceholder: "For example 1416",
+    sceneIdPlaceholder: "Enter scene ID: e.g. 1416",
     run: "Run",
     stop: "Stop",
     rerun: "Rerun",
@@ -246,9 +246,7 @@ function log(message, detail) {
 
 function formatStatusText(text) {
   const value = String(text || "").trim();
-  if (!value) return "";
-  if (/[!！。.]$/.test(value)) return value;
-  return `${value}${state.locale === "zh" ? "！" : "!"}`;
+  return value;
 }
 
 function setStatus(text, tone) {
