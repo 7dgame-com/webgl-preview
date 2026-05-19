@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.19.15";
+const WEBGL_PREVIEW_VERSION = "2026.05.19.16";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -39,6 +39,7 @@ const I18N = {
     sendingUnity: "发送到 Unity",
     startingScene: "正在启动场景",
     startingSceneDetail: "场景数据已读取完成，正在发送到 Unity。",
+    sceneResourceLoading: "场景资源加载中",
     runFailed: "运行失败",
     running: "运行中",
     cachePlugin: "正在缓存 WebGL 插件",
@@ -86,6 +87,7 @@ const I18N = {
     sendingUnity: "Sending to Unity",
     startingScene: "Starting scene",
     startingSceneDetail: "Scene data is ready and is being sent to Unity.",
+    sceneResourceLoading: "Loading scene resources",
     runFailed: "Run failed",
     running: "Running",
     cachePlugin: "Caching WebGL Plugin",
@@ -120,6 +122,7 @@ const state = {
   running: false,
   busy: false,
   sceneLoading: false,
+  sceneResourceLoading: false,
   cacheActive: false,
   frameSession: "",
   runSerial: 0,
@@ -265,7 +268,8 @@ function renderControls() {
   const isActive = state.busy || state.running;
   const isLoading = !elements.loadingShield.hidden;
   if (elements.idleHint) {
-    elements.idleHint.hidden = state.running && !state.sceneLoading && !isLoading;
+    elements.idleHint.hidden =
+      state.running && !state.sceneLoading && !state.sceneResourceLoading && !isLoading;
   }
   if (elements.loadingProgress) {
     elements.loadingProgress.hidden = !isLoading;
@@ -915,6 +919,7 @@ async function runScene() {
 
   const runSerial = startRunAttempt();
   state.payload = null;
+  state.sceneResourceLoading = false;
   if (isUnityFrameStopped() || !state.frameReady) {
     loadUnityFrame();
   } else {
@@ -954,6 +959,7 @@ async function runScene() {
   } catch (error) {
     state.running = false;
     state.sceneLoading = false;
+    state.sceneResourceLoading = false;
     setStatus(t("runFailed"), "error");
     setLoadingShield(false);
     log(error instanceof Error ? error.message : String(error));
@@ -1002,6 +1008,7 @@ function stopScene() {
   state.stopped = true;
   state.running = false;
   state.sceneLoading = false;
+  state.sceneResourceLoading = false;
   unloadUnityFrame();
   setStatus(t("enterSceneId"), "ready");
   setLoadingShield(false);
@@ -1054,9 +1061,19 @@ function setupFrame() {
     }
     if (message.type === "unity-web-preview-scene-forwarded") {
       state.sceneLoading = false;
-      setStatus(t("running"), "running");
+      state.sceneResourceLoading = true;
+      setStatus(t("sceneResourceLoading"), "busy");
       hideLoadingShieldIfReady();
       log(t("runnerAccepted"), { length: message.length });
+    }
+    if (message.type === "unity-web-preview-scene-visible") {
+      if (!state.running) {
+        return;
+      }
+      state.sceneResourceLoading = false;
+      setStatus(t("running"), "running");
+      hideLoadingShieldIfReady();
+      renderControls();
     }
     if (message.type === "webgl-preview-loading") {
       if (message.visible) {

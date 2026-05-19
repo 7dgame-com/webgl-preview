@@ -120,7 +120,7 @@
         updateBannerVisibility();
       }
 
-      var webPreviewBuildCacheVersion = "2026.05.19.15";
+      var webPreviewBuildCacheVersion = "2026.05.19.16";
       var webPreviewCacheStartupTimeoutMs = 10000;
       var buildUrl = "Build";
       function withBuildCacheVersion(url) {
@@ -266,6 +266,33 @@
       }
 
       var webPreviewCacheReady = warmWebPreviewCache();
+      var webPreviewSceneVisibleNotified = false;
+
+      function notifyWebPreviewSceneVisible(message) {
+        if (webPreviewSceneVisibleNotified || !window.parent || window.parent === window) {
+          return;
+        }
+        webPreviewSceneVisibleNotified = true;
+        window.parent.postMessage({
+          type: "unity-web-preview-scene-visible",
+          session: webPreviewSession,
+          message: message || ""
+        }, "*");
+      }
+
+      (function installWebPreviewSceneLogObserver() {
+        var originalLog = console.log;
+        console.log = function() {
+          var first = arguments.length ? String(arguments[0] || "") : "";
+          if (
+            first.indexOf("[WebPreview] Scene content bounds:") !== -1 &&
+            /(?:hasBounds=True|hasBounds=true|renderers=[1-9]\d*)/.test(first)
+          ) {
+            notifyWebPreviewSceneVisible(first);
+          }
+          return originalLog.apply(console, arguments);
+        };
+      })();
 
       var loaderUrl = withBuildCacheVersion(buildUrl + "/public.loader.js");
       var config = {
@@ -663,6 +690,7 @@
         }
 
         function sendSceneJson(payload) {
+          webPreviewSceneVisibleNotified = false;
           var json = toSceneJson(payload);
           forwardSceneJson(json);
         }
