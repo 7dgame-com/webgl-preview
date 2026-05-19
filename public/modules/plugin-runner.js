@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.19.2";
+const WEBGL_PREVIEW_VERSION = "2026.05.19.3";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -261,7 +261,9 @@ function handleHostMessage(event) {
     state.config =
       payload.config && typeof payload.config === "object" ? payload.config : {};
     elements.apiBase.textContent = resolveApiBase();
-    setStatus("已连接宿主", "ready");
+    if (!state.running) {
+      setStatus("请输入场景号", "ready");
+    }
     log("收到宿主 INIT，可使用登录态读取场景。");
   }
 
