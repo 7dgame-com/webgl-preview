@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.19.14";
+const WEBGL_PREVIEW_VERSION = "2026.05.19.15";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -116,7 +116,6 @@ const state = {
   payload: null,
   frameReady: false,
   pendingRun: false,
-  ignoreNextSceneForwarded: false,
   stopped: false,
   running: false,
   busy: false,
@@ -854,38 +853,6 @@ function updateSummary(payload) {
   elements.luaLength.textContent = String(payload.script.lua.length);
 }
 
-function buildEmptyScenePayload() {
-  return {
-    protocolVersion: 1,
-    source: "webgl-preview-plugin-clear",
-    sceneType: "verse",
-    scene: {
-      id: "web-preview-empty",
-      snapshotId: null,
-      uuid: null,
-      name: "",
-      description: "",
-      data: {
-        type: "Verse",
-        children: {
-          modules: [],
-        },
-        parameters: {
-          uuid: genId("empty-scene"),
-        },
-      },
-    },
-    resources: [],
-    metas: [],
-    script: {
-      blockly: null,
-      lua: normalizeLuaTable("", "verse"),
-      javascript: "",
-      metasJavaScript: "",
-    },
-  };
-}
-
 function postScenePayloadToUnity(payload) {
   elements.frame.contentWindow.postMessage(
     {
@@ -916,17 +883,6 @@ function sendPayloadToUnity(payload) {
   });
 }
 
-function clearUnityScene() {
-  state.payload = null;
-  updateSummary(buildEmptyScenePayload());
-  if (!state.frameReady || !elements.frame.contentWindow || isUnityFrameStopped()) {
-    return false;
-  }
-  state.ignoreNextSceneForwarded = true;
-  postScenePayloadToUnity(buildEmptyScenePayload());
-  return true;
-}
-
 function isUnityFrameStopped() {
   return !elements.frame.src || elements.frame.src === "about:blank";
 }
@@ -943,7 +899,6 @@ function isCurrentRunAttempt(runSerial) {
 function unloadUnityFrame() {
   state.frameReady = false;
   state.pendingRun = false;
-  state.ignoreNextSceneForwarded = false;
   state.cacheActive = false;
   state.frameSession = "";
   state.payload = null;
@@ -1047,7 +1002,7 @@ function stopScene() {
   state.stopped = true;
   state.running = false;
   state.sceneLoading = false;
-  clearUnityScene();
+  unloadUnityFrame();
   setStatus(t("enterSceneId"), "ready");
   setLoadingShield(false);
   renderControls();
@@ -1098,10 +1053,6 @@ function setupFrame() {
       hideLoadingShieldIfReady();
     }
     if (message.type === "unity-web-preview-scene-forwarded") {
-      if (state.ignoreNextSceneForwarded) {
-        state.ignoreNextSceneForwarded = false;
-        return;
-      }
       state.sceneLoading = false;
       setStatus(t("running"), "running");
       hideLoadingShieldIfReady();
