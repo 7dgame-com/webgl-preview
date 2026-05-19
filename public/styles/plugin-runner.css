@@ -248,15 +248,26 @@ input {
   background: #eaf1f8;
 }
 
+.preview-surface {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  border-radius: 24px;
+  overflow: hidden;
+  background: #2d3b4c;
+  clip-path: inset(0 round 24px);
+  transform: translateZ(0);
+  will-change: transform;
+}
+
 .preview-frame {
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
   border: 0;
-  border-radius: 12px;
   display: block;
-  overflow: hidden;
   background: #2d3b4c;
 }
 
@@ -300,7 +311,7 @@ input {
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  border-radius: 12px;
+  border-radius: 24px;
   background: #101821;
 }
 

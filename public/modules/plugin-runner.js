@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.19.17";
+const WEBGL_PREVIEW_VERSION = "2026.05.19.18";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -266,7 +266,6 @@ function setLoadingProgress(percentText, { indeterminate = false } = {}) {
   const match = String(percentText || "").match(/(\d{1,3})%/);
   const percent = match ? Math.max(0, Math.min(100, Number(match[1]))) : 0;
   elements.loadingProgress.dataset.mode = indeterminate ? "indeterminate" : "";
-  elements.loadingProgress.hidden = elements.loadingShield.hidden && !state.sceneResourceLoading;
   elements.loadingProgressBar.style.width = `${percent}%`;
   elements.loadingProgressText.textContent = `${percent}%`;
 }
@@ -274,18 +273,22 @@ function setLoadingProgress(percentText, { indeterminate = false } = {}) {
 function renderControls() {
   const isActive = state.busy || state.running;
   const isLoading = !elements.loadingShield.hidden || state.sceneResourceLoading;
+  const shouldShowProgress =
+    state.sceneResourceLoading ||
+    (!elements.loadingShield.hidden &&
+      (state.cacheActive || state.busy || state.sceneLoading || !state.frameReady));
   if (elements.idleHint) {
     elements.idleHint.hidden =
       state.running && !state.sceneLoading && !state.sceneResourceLoading && !isLoading;
   }
   if (elements.loadingProgress) {
-    elements.loadingProgress.hidden = !isLoading;
+    elements.loadingProgress.hidden = !shouldShowProgress;
   }
   elements.sceneField.hidden = isActive;
   elements.run.hidden = isActive;
   elements.stop.hidden = !isActive;
   elements.reload.hidden = !isActive;
-  elements.run.disabled = state.busy || isLoading;
+  elements.run.disabled = state.busy;
   elements.stop.disabled = (state.busy && state.stopped) || isLoading;
   elements.reload.disabled = state.busy || isLoading;
 }

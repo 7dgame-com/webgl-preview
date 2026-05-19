@@ -7,7 +7,7 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <title>WebGL</title>
-    <link rel="stylesheet" href="./styles/plugin-runner.css?v=2026.05.19.17" />
+    <link rel="stylesheet" href="./styles/plugin-runner.css?v=2026.05.19.18" />
   </head>
   <body>
     <main class="app-shell">
@@ -44,12 +44,14 @@
       </header>
 
       <section class="viewer" aria-label="Unity WebGL 预览" data-i18n-aria-label="viewerLabel">
-        <iframe
-          class="preview-frame"
-          title="Unity WebGL"
-          data-frame
-          allow="fullscreen; clipboard-read; clipboard-write"
-        ></iframe>
+        <div class="preview-surface">
+          <iframe
+            class="preview-frame"
+            title="Unity WebGL"
+            data-frame
+            allow="fullscreen; clipboard-read; clipboard-write"
+          ></iframe>
+        </div>
         <button
           class="fullscreen-button"
           type="button"
@@ -96,6 +98,6 @@
       </section>
     </main>
 
-    <script type="module" src="./modules/plugin-runner.js?v=2026.05.19.17"></script>
+    <script type="module" src="./modules/plugin-runner.js?v=2026.05.19.18"></script>
   </body>
 </html>
