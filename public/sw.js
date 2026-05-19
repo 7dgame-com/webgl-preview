@@ -1,7 +1,8 @@
-const WEBGL_PREVIEW_CACHE_VERSION = "2026.05.19.1";
+const WEBGL_PREVIEW_CACHE_VERSION = "2026.05.19.3";
 const WEBGL_PREVIEW_CACHE_PREFIX = "xrugc-webgl-preview-";
 const WEBGL_PREVIEW_CACHE_NAME =
   WEBGL_PREVIEW_CACHE_PREFIX + WEBGL_PREVIEW_CACHE_VERSION;
+const WARM_CACHE_FILE_TIMEOUT_MS = 15000;
 const CORE_BUILD_PATHS = [
   "Build/public.loader.js",
   "Build/public.framework.js.gz",
@@ -105,9 +106,22 @@ const fetchAndCache = async (request, options = {}) => {
 };
 
 const fetchAndWarmCache = async (cache, request, signal) => {
-  const response = await fetch(request, { signal });
-  if (response.ok || response.type === "opaque") {
-    await cache.put(stableRequestFor(request), response.clone());
+  const timeoutController = new AbortController();
+  const timeout = setTimeout(
+    () => timeoutController.abort(),
+    WARM_CACHE_FILE_TIMEOUT_MS
+  );
+  const abortSignal = AbortSignal.any
+    ? AbortSignal.any([signal, timeoutController.signal])
+    : signal;
+
+  try {
+    const response = await fetch(request, { signal: abortSignal });
+    if (response.ok || response.type === "opaque") {
+      await cache.put(stableRequestFor(request), response.clone());
+    }
+  } finally {
+    clearTimeout(timeout);
   }
 };
 

@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.19.8";
+const WEBGL_PREVIEW_VERSION = "2026.05.19.11";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -145,6 +145,9 @@ const elements = {
   log: document.querySelector("[data-log]"),
   frame: document.querySelector("[data-frame]"),
   idleHint: document.querySelector("[data-idle-hint]"),
+  loadingProgress: document.querySelector("[data-loading-progress]"),
+  loadingProgressBar: document.querySelector("[data-loading-progress-bar]"),
+  loadingProgressText: document.querySelector("[data-loading-progress-text]"),
   loadingShield: document.querySelector("[data-loading-shield]"),
   loadingTitle: document.querySelector("[data-loading-title]"),
   loadingDetail: document.querySelector("[data-loading-detail]"),
@@ -245,11 +248,22 @@ function setStatus(text, tone) {
   elements.status.dataset.tone = tone || "";
 }
 
+function setLoadingProgress(percentText) {
+  const match = String(percentText || "").match(/(\d{1,3})%/);
+  const percent = match ? Math.max(0, Math.min(100, Number(match[1]))) : 0;
+  elements.loadingProgress.hidden = elements.loadingShield.hidden;
+  elements.loadingProgressBar.style.width = `${percent}%`;
+  elements.loadingProgressText.textContent = `${percent}%`;
+}
+
 function renderControls() {
   const isActive = state.busy || state.running;
   const isLoading = !elements.loadingShield.hidden;
   if (elements.idleHint) {
-    elements.idleHint.hidden = state.running || state.sceneLoading;
+    elements.idleHint.hidden = state.running && !state.sceneLoading && !isLoading;
+  }
+  if (elements.loadingProgress) {
+    elements.loadingProgress.hidden = !isLoading;
   }
   elements.sceneField.hidden = isActive;
   elements.run.hidden = isActive;
@@ -264,6 +278,14 @@ function setLoadingShield(visible, detail, title) {
   elements.loadingShield.hidden = !visible;
   if (title) elements.loadingTitle.textContent = title;
   if (detail) elements.loadingDetail.textContent = detail;
+  if (visible) {
+    setStatus(title || t("loadingPlugin"), "busy");
+    setLoadingProgress(detail || "");
+  } else {
+    elements.loadingProgress.hidden = true;
+    elements.loadingProgressBar.style.width = "0%";
+    elements.loadingProgressText.textContent = "0%";
+  }
   renderControls();
 }
 

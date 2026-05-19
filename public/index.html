@@ -7,7 +7,7 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <title>WebGL</title>
-    <link rel="stylesheet" href="./styles/plugin-runner.css?v=2026.05.19.8" />
+    <link rel="stylesheet" href="./styles/plugin-runner.css?v=2026.05.19.11" />
   </head>
   <body>
     <main class="app-shell">
@@ -41,7 +41,6 @@
         </div>
 
         <div class="topbar-meta">
-          <div class="status" data-status>待运行</div>
           <div class="version" data-version>版本 -</div>
         </div>
       </header>
@@ -54,10 +53,19 @@
           allow="fullscreen; clipboard-read; clipboard-write"
         ></iframe>
         <div class="idle-hint" data-idle-hint aria-hidden="true">
-          <div class="idle-logo"></div>
+          <div class="idle-stack">
+            <div class="status" data-status>待运行</div>
+            <div class="idle-logo"></div>
+            <div class="loading-progress" data-loading-progress hidden>
+              <div class="loading-progress-track">
+                <div class="loading-progress-bar" data-loading-progress-bar></div>
+              </div>
+              <div class="loading-progress-text" data-loading-progress-text>0%</div>
+            </div>
+          </div>
         </div>
         <div class="loading-shield" data-loading-shield>
-          <div class="loading-panel" role="status" aria-live="polite">
+          <div class="loading-panel sr-only" role="status" aria-live="polite">
             <div class="loading-title" data-loading-title>正在加载 WebGL 插件</div>
             <div class="loading-detail" data-loading-detail>
               正在准备 Unity 运行环境，请稍候。
@@ -79,6 +87,6 @@
       </section>
     </main>
 
-    <script type="module" src="./modules/plugin-runner.js?v=2026.05.19.8"></script>
+    <script type="module" src="./modules/plugin-runner.js?v=2026.05.19.11"></script>
   </body>
 </html>
