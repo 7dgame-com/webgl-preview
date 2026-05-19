@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.19.11";
+const WEBGL_PREVIEW_VERSION = "2026.05.19.12";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -52,7 +52,7 @@ const I18N = {
     tokenUpdated: "登录 token 已更新。",
     payloadSent: "场景 payload 已发送到 Unity。",
     sceneReadStart: "开始读取场景 {sceneId}。",
-    stopped: "已停止，Unity 运行实例已卸载。",
+    stopped: "已停止，场景已卸载并保留本地缓存。",
     iframeLoaded: "Unity iframe 已加载。",
     runnerReady: "Unity runner 已就绪。",
     runnerAccepted: "Unity runner 已接收场景。",
@@ -99,7 +99,7 @@ const I18N = {
     tokenUpdated: "Login token updated.",
     payloadSent: "Scene payload sent to Unity.",
     sceneReadStart: "Started reading scene {sceneId}.",
-    stopped: "Stopped. The Unity runtime instance has been unloaded.",
+    stopped: "Stopped. The scene was unloaded and local cache was kept.",
     iframeLoaded: "Unity iframe loaded.",
     runnerReady: "Unity runner is ready.",
     runnerAccepted: "Unity runner accepted the scene.",
@@ -116,6 +116,7 @@ const state = {
   payload: null,
   frameReady: false,
   pendingRun: false,
+  ignoreNextSceneForwarded: false,
   stopped: false,
   running: false,
   busy: false,
@@ -848,6 +849,48 @@ function updateSummary(payload) {
   elements.luaLength.textContent = String(payload.script.lua.length);
 }
 
+function buildEmptyScenePayload() {
+  return {
+    protocolVersion: 1,
+    source: "webgl-preview-plugin-clear",
+    sceneType: "verse",
+    scene: {
+      id: "web-preview-empty",
+      snapshotId: null,
+      uuid: null,
+      name: "",
+      description: "",
+      data: {
+        type: "Verse",
+        children: {
+          modules: [],
+        },
+        parameters: {
+          uuid: genId("empty-scene"),
+        },
+      },
+    },
+    resources: [],
+    metas: [],
+    script: {
+      blockly: null,
+      lua: "local verse = {}\nreturn verse",
+      javascript: "",
+      metasJavaScript: "",
+    },
+  };
+}
+
+function postScenePayloadToUnity(payload) {
+  elements.frame.contentWindow.postMessage(
+    {
+      type: "load-scene-json",
+      payload,
+    },
+    "*"
+  );
+}
+
 function sendPayloadToUnity(payload) {
   if (state.stopped) {
     state.pendingRun = true;
@@ -859,19 +902,24 @@ function sendPayloadToUnity(payload) {
     return;
   }
 
-  elements.frame.contentWindow.postMessage(
-    {
-      type: "load-scene-json",
-      payload,
-    },
-    "*"
-  );
+  postScenePayloadToUnity(payload);
   state.pendingRun = false;
   log(t("payloadSent"), {
     sceneId: payload.scene.id,
     resources: payload.resources.length,
     metas: payload.metas.length,
   });
+}
+
+function clearUnityScene() {
+  state.payload = null;
+  updateSummary(buildEmptyScenePayload());
+  if (!state.frameReady || !elements.frame.contentWindow || isUnityFrameStopped()) {
+    return false;
+  }
+  state.ignoreNextSceneForwarded = true;
+  postScenePayloadToUnity(buildEmptyScenePayload());
+  return true;
 }
 
 function isUnityFrameStopped() {
@@ -890,6 +938,7 @@ function isCurrentRunAttempt(runSerial) {
 function unloadUnityFrame() {
   state.frameReady = false;
   state.pendingRun = false;
+  state.ignoreNextSceneForwarded = false;
   state.cacheActive = false;
   state.frameSession = "";
   state.payload = null;
@@ -993,7 +1042,7 @@ function stopScene() {
   state.stopped = true;
   state.running = false;
   state.sceneLoading = false;
-  unloadUnityFrame();
+  clearUnityScene();
   setStatus(t("enterSceneId"), "ready");
   setLoadingShield(false);
   renderControls();
@@ -1044,6 +1093,10 @@ function setupFrame() {
       hideLoadingShieldIfReady();
     }
     if (message.type === "unity-web-preview-scene-forwarded") {
+      if (state.ignoreNextSceneForwarded) {
+        state.ignoreNextSceneForwarded = false;
+        return;
+      }
       state.sceneLoading = false;
       setStatus(t("running"), "running");
       hideLoadingShieldIfReady();
