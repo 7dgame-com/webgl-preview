@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.19.5";
+const WEBGL_PREVIEW_VERSION = "2026.05.19.6";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -12,6 +12,103 @@ const ASSET_PATH_RE =
   /\.(?:png|jpe?g|gif|webp|bmp|svg|mp3|wav|ogg|m4a|mp4|webm|glb|gltf|fbx|obj|vox)(?:[?#]|$)/i;
 const VIDEO_PATH_RE = /\.(?:mp4|webm)(?:[?#]|$)/i;
 const LOCAL_TOKEN_STORAGE_KEY = "xrugc.webglPreview.token";
+
+const I18N = {
+  zh: {
+    topbarLabel: "WebGL 控制栏",
+    viewerLabel: "Unity WebGL 预览",
+    sceneIdLabel: "场景号",
+    sceneIdPlaceholder: "例如 1416",
+    run: "运行",
+    stop: "停止",
+    rerun: "重跑",
+    configured: "已配置",
+    notConfigured: "未配置",
+    enterSceneId: "请输入场景号",
+    enterValidSceneId: "请输入有效场景号",
+    loadingPlugin: "正在加载 WebGL 插件",
+    loadingPluginDetail: "0% 正在加载 Unity WebGL 运行环境，请稍候。",
+    loadingPluginGuard:
+      "0% 正在加载 Unity WebGL 运行环境，请勿切换场景或重复点击。",
+    loadingPluginFallback: "正在加载 Unity WebGL 运行环境，请稍候。",
+    readingScene: "读取场景中",
+    readingSceneDetail: "正在读取场景 {sceneId}，请稍候。",
+    loadingScene: "正在加载场景",
+    preparingScene: "正在准备场景",
+    preparingSceneDetail: "正在整理场景资源、脚本和实体数据。",
+    sendingUnity: "发送到 Unity",
+    startingScene: "正在启动场景",
+    startingSceneDetail: "场景数据已读取完成，正在发送到 Unity。",
+    runFailed: "运行失败",
+    running: "运行中",
+    cachePlugin: "正在缓存 WebGL 插件",
+    cacheReuse: "已复用本地缓存",
+    cachePrepare: "正在准备插件资源",
+    cacheDetail:
+      "{percent} {action} {completed}/{total}{path}。首次加载 Unity 大包会较慢，请勿退出或重复操作。",
+    localTokenMissing:
+      "API 401: 本地独立运行缺少登录态，请在“本地访问令牌”里粘贴平台 token 后重试。",
+    hostInit: "收到宿主 INIT，可使用登录态读取场景。",
+    tokenUpdated: "登录 token 已更新。",
+    payloadSent: "场景 payload 已发送到 Unity。",
+    sceneReadStart: "开始读取场景 {sceneId}。",
+    stopped: "已停止，Unity 运行实例已卸载。",
+    iframeLoaded: "Unity iframe 已加载。",
+    runnerReady: "Unity runner 已就绪。",
+    runnerAccepted: "Unity runner 已接收场景。",
+    cacheFailed: "插件缓存失败，将继续尝试直接加载。",
+    tokenSaved: "本地访问令牌已保存。",
+    tokenCleared: "本地访问令牌已清空。",
+    opened: "WebGL 场景运行器已打开。",
+  },
+  en: {
+    topbarLabel: "WebGL controls",
+    viewerLabel: "Unity WebGL preview",
+    sceneIdLabel: "Scene ID",
+    sceneIdPlaceholder: "For example 1416",
+    run: "Run",
+    stop: "Stop",
+    rerun: "Rerun",
+    configured: "Configured",
+    notConfigured: "Not configured",
+    enterSceneId: "Enter a scene ID",
+    enterValidSceneId: "Enter a valid scene ID",
+    loadingPlugin: "Loading WebGL Plugin",
+    loadingPluginDetail: "0% Loading the Unity WebGL runtime. Please wait.",
+    loadingPluginGuard:
+      "0% Loading the Unity WebGL runtime. Do not switch scenes or click repeatedly.",
+    loadingPluginFallback: "Loading the Unity WebGL runtime. Please wait.",
+    readingScene: "Reading scene",
+    readingSceneDetail: "Reading scene {sceneId}. Please wait.",
+    loadingScene: "Loading scene",
+    preparingScene: "Preparing scene",
+    preparingSceneDetail: "Preparing scene resources, scripts, and entities.",
+    sendingUnity: "Sending to Unity",
+    startingScene: "Starting scene",
+    startingSceneDetail: "Scene data is ready and is being sent to Unity.",
+    runFailed: "Run failed",
+    running: "Running",
+    cachePlugin: "Caching WebGL Plugin",
+    cacheReuse: "Using local cache",
+    cachePrepare: "Preparing plugin assets",
+    cacheDetail:
+      "{percent} {action} {completed}/{total}{path}. The first Unity package load can be slow. Do not leave or repeat actions.",
+    localTokenMissing:
+      "API 401: Local standalone mode is missing login credentials. Paste a platform token into the local access token field and try again.",
+    hostInit: "Host INIT received. Login state is available for scene loading.",
+    tokenUpdated: "Login token updated.",
+    payloadSent: "Scene payload sent to Unity.",
+    sceneReadStart: "Started reading scene {sceneId}.",
+    stopped: "Stopped. The Unity runtime instance has been unloaded.",
+    iframeLoaded: "Unity iframe loaded.",
+    runnerReady: "Unity runner is ready.",
+    runnerAccepted: "Unity runner accepted the scene.",
+    cacheFailed: "Plugin cache failed. Continuing with direct loading.",
+    tokenSaved: "Local access token saved.",
+    tokenCleared: "Local access token cleared.",
+    opened: "WebGL scene runner opened.",
+  },
+};
 
 const state = {
   token: "",
@@ -51,6 +148,35 @@ const elements = {
   loadingTitle: document.querySelector("[data-loading-title]"),
   loadingDetail: document.querySelector("[data-loading-detail]"),
 };
+
+function resolveLocale() {
+  const lang = (readQuery().get("lang") || navigator.language || "zh-CN")
+    .toLowerCase()
+    .replace("_", "-");
+  return lang.startsWith("zh") ? "zh" : "en";
+}
+
+const locale = resolveLocale();
+
+function t(key, params = {}) {
+  const template = I18N[locale][key] || I18N.zh[key] || key;
+  return template.replace(/\{(\w+)\}/g, (_, name) =>
+    Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : ""
+  );
+}
+
+function applyI18n() {
+  document.documentElement.lang = locale === "zh" ? "zh-CN" : "en";
+  document.querySelectorAll("[data-i18n]").forEach((node) => {
+    node.textContent = t(node.dataset.i18n);
+  });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((node) => {
+    node.setAttribute("placeholder", t(node.dataset.i18nPlaceholder));
+  });
+  document.querySelectorAll("[data-i18n-aria-label]").forEach((node) => {
+    node.setAttribute("aria-label", t(node.dataset.i18nAriaLabel));
+  });
+}
 
 function genId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -213,7 +339,7 @@ function setToken(token, options = {}) {
     elements.tokenInput.value = value;
   }
   if (elements.tokenState) {
-    elements.tokenState.textContent = value ? "已配置" : "未配置";
+    elements.tokenState.textContent = value ? t("configured") : t("notConfigured");
   }
   if (options.persist) {
     writeStoredToken(value);
@@ -264,15 +390,15 @@ function handleHostMessage(event) {
       payload.config && typeof payload.config === "object" ? payload.config : {};
     elements.apiBase.textContent = resolveApiBase();
     if (!state.running) {
-      setStatus("请输入场景号", "ready");
+      setStatus(t("enterSceneId"), "ready");
     }
-    log("收到宿主 INIT，可使用登录态读取场景。");
+    log(t("hostInit"));
   }
 
   if (message.type === "TOKEN_UPDATE") {
     const payload = message.payload || {};
     setToken(typeof payload.token === "string" ? payload.token : "");
-    log("登录 token 已更新。");
+    log(t("tokenUpdated"));
   }
 }
 
@@ -551,9 +677,7 @@ async function requestJsonThroughProxy(url) {
   if (!response.ok) {
     const text = await response.text().catch(() => "");
     if (response.status === 401 && !state.token) {
-      throw new Error(
-        "API 401: 本地独立运行缺少登录态，请在“本地访问令牌”里粘贴平台 token 后重试。"
-      );
+      throw new Error(t("localTokenMissing"));
     }
     throw new Error(`API ${response.status}: ${text || response.statusText}`);
   }
@@ -654,7 +778,7 @@ function sendPayloadToUnity(payload) {
     "*"
   );
   state.pendingRun = false;
-  log("场景 payload 已发送到 Unity。", {
+  log(t("payloadSent"), {
     sceneId: payload.scene.id,
     resources: payload.resources.length,
     metas: payload.metas.length,
@@ -686,7 +810,7 @@ function unloadUnityFrame() {
 async function runScene() {
   const sceneId = Number(elements.sceneId.value);
   if (!Number.isFinite(sceneId) || sceneId <= 0) {
-    setStatus("请输入有效场景号", "error");
+    setStatus(t("enterValidSceneId"), "error");
     elements.sceneId.focus();
     return;
   }
@@ -701,9 +825,13 @@ async function runScene() {
   state.running = true;
   state.sceneLoading = true;
   setControlsBusy(true);
-  setStatus("读取场景中", "busy");
-  setLoadingShield(true, `正在读取场景 ${sceneId}，请稍候。`, "正在加载场景");
-  log(`开始读取场景 ${sceneId}。`);
+  setStatus(t("readingScene"), "busy");
+  setLoadingShield(
+    true,
+    t("readingSceneDetail", { sceneId }),
+    t("loadingScene")
+  );
+  log(t("sceneReadStart", { sceneId }));
 
   try {
     const [runtimeData, scriptRuntimeData] = shouldUseLegacyVerseApi()
@@ -715,20 +843,20 @@ async function runScene() {
     if (!isCurrentRunAttempt(runSerial)) {
       return;
     }
-    setLoadingShield(true, "正在整理场景资源、脚本和实体数据。", "正在准备场景");
+    setLoadingShield(true, t("preparingSceneDetail"), t("preparingScene"));
     const payload = buildPayload(sceneId, runtimeData, scriptRuntimeData);
     if (!isCurrentRunAttempt(runSerial)) {
       return;
     }
     state.payload = payload;
     updateSummary(payload);
-    setStatus("发送到 Unity", "busy");
-    setLoadingShield(true, "场景数据已读取完成，正在发送到 Unity。", "正在启动场景");
+    setStatus(t("sendingUnity"), "busy");
+    setLoadingShield(true, t("startingSceneDetail"), t("startingScene"));
     sendPayloadToUnity(payload);
   } catch (error) {
     state.running = false;
     state.sceneLoading = false;
-    setStatus("运行失败", "error");
+    setStatus(t("runFailed"), "error");
     setLoadingShield(false);
     log(error instanceof Error ? error.message : String(error));
   } finally {
@@ -756,14 +884,15 @@ function loadUnityFrame({ clearPayload = false, autoRun = false } = {}) {
   }
   setLoadingShield(
     true,
-    "0% 正在加载 Unity WebGL 运行环境，请稍候。",
-    "正在加载 WebGL 插件"
+    t("loadingPluginDetail"),
+    t("loadingPlugin")
   );
   const frameUrl = new URL("./embed.html", window.location.href);
   frameUrl.searchParams.set("embed", "1");
   frameUrl.searchParams.set("plugin", "1");
   frameUrl.searchParams.set("v", WEBGL_PREVIEW_VERSION);
   frameUrl.searchParams.set("session", frameSession);
+  frameUrl.searchParams.set("lang", readQuery().get("lang") || document.documentElement.lang);
   if (shouldUseDirectCdnAssets()) {
     frameUrl.searchParams.set("assetMode", "direct");
   }
@@ -776,16 +905,16 @@ function stopScene() {
   state.running = false;
   state.sceneLoading = false;
   unloadUnityFrame();
-  setStatus("请输入场景号", "ready");
+  setStatus(t("enterSceneId"), "ready");
   setLoadingShield(false);
   renderControls();
-  log("已停止，Unity 运行实例已卸载。");
+  log(t("stopped"));
 }
 
 function rerunScene() {
   if (!elements.sceneId.value) {
     elements.sceneId.focus();
-    setStatus("请输入场景号", "error");
+    setStatus(t("enterSceneId"), "error");
     return;
   }
   stopScene();
@@ -795,15 +924,15 @@ function rerunScene() {
 function setupFrame() {
   setLoadingShield(
     true,
-    "0% 正在加载 Unity WebGL 运行环境，请勿切换场景或重复点击。",
-    "正在加载 WebGL 插件"
+    t("loadingPluginGuard"),
+    t("loadingPlugin")
   );
 
   elements.frame.addEventListener("load", () => {
     if (state.stopped || elements.frame.src === "about:blank") {
       return;
     }
-    log("Unity iframe 已加载。");
+    log(t("iframeLoaded"));
   });
 
   window.addEventListener("message", (event) => {
@@ -816,9 +945,9 @@ function setupFrame() {
         return;
       }
       state.frameReady = true;
-      log("Unity runner 已就绪。");
+      log(t("runnerReady"));
       if (!state.running) {
-        setStatus("请输入场景号", "ready");
+        setStatus(t("enterSceneId"), "ready");
       }
       if (state.payload) {
         sendPayloadToUnity(state.payload);
@@ -827,16 +956,16 @@ function setupFrame() {
     }
     if (message.type === "unity-web-preview-scene-forwarded") {
       state.sceneLoading = false;
-      setStatus("运行中", "running");
+      setStatus(t("running"), "running");
       hideLoadingShieldIfReady();
-      log("Unity runner 已接收场景。", { length: message.length });
+      log(t("runnerAccepted"), { length: message.length });
     }
     if (message.type === "webgl-preview-loading") {
       if (message.visible) {
         setLoadingShield(
           true,
-          message.detail || "正在加载 Unity WebGL 运行环境，请稍候。",
-          message.title || "正在加载 WebGL 插件"
+          message.detail || t("loadingPluginFallback"),
+          message.title || t("loadingPlugin")
         );
       } else {
         hideLoadingShieldIfReady();
@@ -853,11 +982,11 @@ function setupFrame() {
         const total = Number(message.total || 0);
         const path = message.path ? `：${message.path}` : "";
         const percent = formatPercent(completed, total);
-        const action = message.reused ? "已复用本地缓存" : "正在准备插件资源";
+        const action = message.reused ? t("cacheReuse") : t("cachePrepare");
         setLoadingShield(
           true,
-          `${percent} ${action} ${completed}/${total}${path}。首次加载 Unity 大包会较慢，请勿退出或重复操作。`,
-          "正在缓存 WebGL 插件"
+          t("cacheDetail", { percent, action, completed, total, path }),
+          t("cachePlugin")
         );
       }
 
@@ -869,7 +998,7 @@ function setupFrame() {
       if (message.status === "error") {
         state.cacheActive = false;
         setLoadingShield(false);
-        log("插件缓存失败，将继续尝试直接加载。", { message: message.message });
+        log(t("cacheFailed"), { message: message.message });
       }
     }
   });
@@ -882,12 +1011,12 @@ function setupControls() {
   elements.reload.addEventListener("click", rerunScene);
   elements.saveToken.addEventListener("click", () => {
     setToken(elements.tokenInput.value, { persist: true });
-    log(state.token ? "本地访问令牌已保存。" : "本地访问令牌已清空。");
+    log(state.token ? t("tokenSaved") : t("tokenCleared"));
   });
   elements.tokenInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       setToken(elements.tokenInput.value, { persist: true });
-      log(state.token ? "本地访问令牌已保存。" : "本地访问令牌已清空。");
+      log(state.token ? t("tokenSaved") : t("tokenCleared"));
     }
   });
   elements.sceneId.addEventListener("keydown", (event) => {
@@ -898,6 +1027,7 @@ function setupControls() {
 }
 
 function init() {
+  applyI18n();
   initLocalToken();
   readInitialSceneId();
   if (elements.version) {
@@ -908,9 +1038,9 @@ function init() {
   setupFrame();
   window.addEventListener("message", handleHostMessage);
   postPluginReady();
-  setStatus("正在加载插件", "busy");
+  setStatus(t("loadingPlugin"), "busy");
   renderControls();
-  log("WebGL 场景运行器已打开。");
+  log(t("opened"));
 
   if (elements.sceneId.value) {
     runScene();
