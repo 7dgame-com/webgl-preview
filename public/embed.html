@@ -37,6 +37,7 @@
       var webPreviewEmbedded = window.parent && window.parent !== window;
       var webPreviewCacheActive = false;
       var webPreviewUnityReady = false;
+      var webPreviewSession = new URLSearchParams(window.location.search).get("session") || "";
 
       function setWebPreviewLoading(visible, detail, title) {
         if (title) {
@@ -49,6 +50,7 @@
         if (window.parent && window.parent !== window) {
           window.parent.postMessage({
             type: "webgl-preview-loading",
+            session: webPreviewSession,
             visible: !!visible,
             title: loadingTitle.textContent,
             detail: loadingDetail.textContent
@@ -91,6 +93,7 @@
 
       function postCacheStatusToParent(message) {
         if (window.parent && window.parent !== window) {
+          message.session = webPreviewSession;
           window.parent.postMessage(message, "*");
         }
       }
@@ -589,6 +592,7 @@
             if (window.parent && window.parent !== window) {
               window.parent.postMessage({
                 type: "unity-web-preview-scene-forwarded",
+                session: webPreviewSession,
                 length: json.length
               }, "*");
             }
@@ -682,6 +686,7 @@
         if (window.parent && window.parent !== window) {
           window.parent.postMessage({
             type: "unity-web-preview-ready",
+            session: webPreviewSession,
             productName: "Web Preview",
             productVersion: "1.0.0"
           }, "*");

@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.19.3";
+const WEBGL_PREVIEW_VERSION = "2026.05.19.4";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -24,6 +24,8 @@ const state = {
   busy: false,
   sceneLoading: false,
   cacheActive: false,
+  frameSession: "",
+  runSerial: 0,
 };
 
 const elements = {
@@ -663,6 +665,24 @@ function isUnityFrameStopped() {
   return !elements.frame.src || elements.frame.src === "about:blank";
 }
 
+function startRunAttempt() {
+  state.runSerial += 1;
+  return state.runSerial;
+}
+
+function isCurrentRunAttempt(runSerial) {
+  return runSerial === state.runSerial && !state.stopped;
+}
+
+function unloadUnityFrame() {
+  state.frameReady = false;
+  state.pendingRun = false;
+  state.cacheActive = false;
+  state.frameSession = "";
+  state.payload = null;
+  elements.frame.src = "about:blank";
+}
+
 async function runScene() {
   const sceneId = Number(elements.sceneId.value);
   if (!Number.isFinite(sceneId) || sceneId <= 0) {
@@ -671,6 +691,8 @@ async function runScene() {
     return;
   }
 
+  const runSerial = startRunAttempt();
+  state.payload = null;
   if (isUnityFrameStopped() || !state.frameReady) {
     loadUnityFrame();
   } else {
@@ -690,8 +712,14 @@ async function runScene() {
           requestLegacyVerse(sceneId, "js"),
         ])
       : [await requestSnapshot(sceneId), {}];
+    if (!isCurrentRunAttempt(runSerial)) {
+      return;
+    }
     setLoadingShield(true, "正在整理场景资源、脚本和实体数据。", "正在准备场景");
     const payload = buildPayload(sceneId, runtimeData, scriptRuntimeData);
+    if (!isCurrentRunAttempt(runSerial)) {
+      return;
+    }
     state.payload = payload;
     updateSummary(payload);
     setStatus("发送到 Unity", "busy");
@@ -716,6 +744,8 @@ function readInitialSceneId() {
 }
 
 function loadUnityFrame({ clearPayload = false, autoRun = false } = {}) {
+  const frameSession = genId("unity");
+  state.frameSession = frameSession;
   state.stopped = false;
   state.frameReady = false;
   if (clearPayload) {
@@ -733,6 +763,7 @@ function loadUnityFrame({ clearPayload = false, autoRun = false } = {}) {
   frameUrl.searchParams.set("embed", "1");
   frameUrl.searchParams.set("plugin", "1");
   frameUrl.searchParams.set("v", WEBGL_PREVIEW_VERSION);
+  frameUrl.searchParams.set("session", frameSession);
   if (shouldUseDirectCdnAssets()) {
     frameUrl.searchParams.set("assetMode", "direct");
   }
@@ -740,14 +771,15 @@ function loadUnityFrame({ clearPayload = false, autoRun = false } = {}) {
 }
 
 function stopScene() {
+  startRunAttempt();
   state.stopped = true;
-  state.pendingRun = false;
   state.running = false;
   state.sceneLoading = false;
+  unloadUnityFrame();
   setStatus("请输入场景号", "ready");
   setLoadingShield(false);
   renderControls();
-  log("已停止。");
+  log("已停止，Unity 运行实例已卸载。");
 }
 
 function rerunScene() {
@@ -756,6 +788,7 @@ function rerunScene() {
     setStatus("请输入场景号", "error");
     return;
   }
+  stopScene();
   runScene();
 }
 
@@ -775,7 +808,13 @@ function setupFrame() {
 
   window.addEventListener("message", (event) => {
     const message = event.data || {};
+    if (message.session && message.session !== state.frameSession) {
+      return;
+    }
     if (message.type === "unity-web-preview-ready") {
+      if (state.stopped) {
+        return;
+      }
       state.frameReady = true;
       log("Unity runner 已就绪。");
       if (!state.running) {
