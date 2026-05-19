@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.19.12";
+const WEBGL_PREVIEW_VERSION = "2026.05.19.13";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -244,8 +244,15 @@ function log(message, detail) {
   elements.log.textContent = `[${timestamp}] ${message}${suffix}\n\n${elements.log.textContent}`;
 }
 
+function formatStatusText(text) {
+  const value = String(text || "").trim();
+  if (!value) return "";
+  if (/[!！。.]$/.test(value)) return value;
+  return `${value}${state.locale === "zh" ? "！" : "!"}`;
+}
+
 function setStatus(text, tone) {
-  elements.status.textContent = text;
+  elements.status.textContent = formatStatusText(text);
   elements.status.dataset.tone = tone || "";
 }
 
@@ -874,7 +881,7 @@ function buildEmptyScenePayload() {
     metas: [],
     script: {
       blockly: null,
-      lua: "local verse = {}\nreturn verse",
+      lua: normalizeLuaTable("", "verse"),
       javascript: "",
       metasJavaScript: "",
     },
