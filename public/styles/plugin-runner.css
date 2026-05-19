@@ -179,14 +179,36 @@ input {
   background: #2d3b4c;
 }
 
+.idle-hint {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  background: #101821;
+}
+
+.idle-hint[hidden] {
+  display: none !important;
+}
+
+.idle-logo {
+  width: 118px;
+  height: 118px;
+  background: url("../TemplateData/unity-logo-dark.png") center / contain no-repeat;
+  opacity: 0.92;
+}
+
 .loading-shield {
   position: absolute;
   inset: 0;
-  z-index: 10;
+  z-index: 12;
   display: grid;
-  place-items: center;
-  padding: 24px;
-  background: rgba(20, 28, 38, 0.76);
+  align-items: start;
+  justify-items: center;
+  padding: 26px 24px;
+  background: rgba(10, 16, 24, 0.22);
   color: #ffffff;
   cursor: wait;
 }
@@ -196,17 +218,17 @@ input {
 }
 
 .loading-panel {
-  width: min(420px, 100%);
-  border: 1px solid rgba(201, 213, 228, 0.28);
+  width: min(620px, 100%);
+  border: 1px solid rgba(151, 192, 244, 0.5);
   border-radius: 8px;
-  padding: 18px 20px;
-  background: rgba(28, 39, 52, 0.96);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+  padding: 14px 18px;
+  background: rgba(18, 29, 43, 0.97);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.32);
   text-align: center;
 }
 
 .loading-title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
 }
 

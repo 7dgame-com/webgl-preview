@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.18.8";
+const WEBGL_PREVIEW_VERSION = "2026.05.19.1";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -44,6 +44,7 @@ const elements = {
   luaLength: document.querySelector("[data-lua-length]"),
   log: document.querySelector("[data-log]"),
   frame: document.querySelector("[data-frame]"),
+  idleHint: document.querySelector("[data-idle-hint]"),
   loadingShield: document.querySelector("[data-loading-shield]"),
   loadingTitle: document.querySelector("[data-loading-title]"),
   loadingDetail: document.querySelector("[data-loading-detail]"),
@@ -67,6 +68,9 @@ function setStatus(text, tone) {
 function renderControls() {
   const isActive = state.busy || state.running;
   const isLoading = !elements.loadingShield.hidden;
+  if (elements.idleHint) {
+    elements.idleHint.hidden = state.running || state.sceneLoading;
+  }
   elements.sceneField.hidden = isActive;
   elements.run.hidden = isActive;
   elements.stop.hidden = !isActive;
@@ -92,6 +96,11 @@ function hideLoadingShieldIfReady() {
 function setControlsBusy(isBusy) {
   state.busy = isBusy;
   renderControls();
+}
+
+function formatPercent(completed, total) {
+  if (!total) return "0%";
+  return `${Math.max(0, Math.min(100, Math.round((completed / total) * 100)))}%`;
 }
 
 function readQuery() {
@@ -149,6 +158,18 @@ function resolveLegacyApiBase() {
       resolveParentApiBase() ||
       "https://d.dev.xrugc.com/api"
   );
+}
+
+function shouldUseDirectCdnAssets() {
+  const query = readQuery();
+  const value =
+    state.config.directCdn ||
+    state.config.directCdnAssets ||
+    state.config.assetMode ||
+    query.get("directCdn") ||
+    query.get("directCdnAssets") ||
+    query.get("assetMode");
+  return /^(1|true|direct|cdn)$/i.test(String(value || ""));
 }
 
 function shouldUseLegacyVerseApi() {
@@ -383,12 +404,30 @@ function toUnityPreviewProxyRequestUrl(value, proxyOrigin) {
   )}`;
 }
 
+function toUnityPreviewAssetUrl(value, proxyOrigin) {
+  const normalizedRemoteUrl = normalizeUnityPreviewRemoteAssetUrl(value);
+  if (!shouldUseDirectCdnAssets()) {
+    return toUnityPreviewProxyRequestUrl(normalizedRemoteUrl, proxyOrigin);
+  }
+
+  try {
+    const url = new URL(normalizedRemoteUrl);
+    if (url.hostname === CDN_HOST) {
+      return url.toString();
+    }
+  } catch {
+    // Fall through to the proxy below.
+  }
+
+  return toUnityPreviewProxyRequestUrl(normalizedRemoteUrl, proxyOrigin);
+}
+
 function toUnityPreviewProxyUrl(value, proxyOrigin, assetBaseOrigin) {
   const normalizedValue = value.replace(/\\\//g, "/");
   if (!/^https?:\/\//i.test(normalizedValue)) {
     if (normalizedValue.startsWith("//")) {
       const absoluteUrl = `${window.location.protocol}${normalizedValue}`;
-      return toUnityPreviewProxyRequestUrl(absoluteUrl, proxyOrigin);
+      return toUnityPreviewAssetUrl(absoluteUrl, proxyOrigin);
     }
 
     if (normalizedValue.startsWith("/__xrugc_proxy__")) {
@@ -403,7 +442,7 @@ function toUnityPreviewProxyUrl(value, proxyOrigin, assetBaseOrigin) {
     }
 
     const absoluteUrl = new URL(normalizedValue, assetBaseOrigin).toString();
-    return toUnityPreviewProxyRequestUrl(absoluteUrl, proxyOrigin);
+    return toUnityPreviewAssetUrl(absoluteUrl, proxyOrigin);
   }
 
   try {
@@ -416,7 +455,7 @@ function toUnityPreviewProxyUrl(value, proxyOrigin, assetBaseOrigin) {
     return value;
   }
 
-  return toUnityPreviewProxyRequestUrl(normalizedValue, proxyOrigin);
+  return toUnityPreviewAssetUrl(normalizedValue, proxyOrigin);
 }
 
 function rewriteStringUrls(value, proxyOrigin, assetBaseOrigin) {
@@ -619,7 +658,7 @@ function sendPayloadToUnity(payload) {
 }
 
 function isUnityFrameStopped() {
-  return state.stopped || elements.frame.src === "about:blank";
+  return !elements.frame.src || elements.frame.src === "about:blank";
 }
 
 async function runScene() {
@@ -630,7 +669,7 @@ async function runScene() {
     return;
   }
 
-  if (isUnityFrameStopped()) {
+  if (isUnityFrameStopped() || !state.frameReady) {
     loadUnityFrame();
   } else {
     state.stopped = false;
@@ -685,20 +724,25 @@ function loadUnityFrame({ clearPayload = false, autoRun = false } = {}) {
   }
   setLoadingShield(
     true,
-    "正在重新加载 Unity WebGL 运行环境，请稍候。",
-    "正在重启 WebGL 插件"
+    "0% 正在加载 Unity WebGL 运行环境，请稍候。",
+    "正在加载 WebGL 插件"
   );
-  elements.frame.src = `./embed.html?embed=1&plugin=1&v=${Date.now()}`;
+  const frameUrl = new URL("./embed.html", window.location.href);
+  frameUrl.searchParams.set("embed", "1");
+  frameUrl.searchParams.set("plugin", "1");
+  frameUrl.searchParams.set("v", WEBGL_PREVIEW_VERSION);
+  if (shouldUseDirectCdnAssets()) {
+    frameUrl.searchParams.set("assetMode", "direct");
+  }
+  elements.frame.src = frameUrl.toString();
 }
 
 function stopScene() {
   state.stopped = true;
   state.pendingRun = false;
-  state.frameReady = false;
   state.running = false;
   state.sceneLoading = false;
-  elements.frame.src = "about:blank";
-  setStatus("已停止", "");
+  setStatus("请输入场景号", "ready");
   setLoadingShield(false);
   renderControls();
   log("已停止。");
@@ -710,14 +754,13 @@ function rerunScene() {
     setStatus("请输入场景号", "error");
     return;
   }
-  loadUnityFrame({ clearPayload: true, autoRun: true });
   runScene();
 }
 
 function setupFrame() {
   setLoadingShield(
     true,
-    "正在加载 Unity WebGL 运行环境，请勿切换场景或重复点击。",
+    "0% 正在加载 Unity WebGL 运行环境，请勿切换场景或重复点击。",
     "正在加载 WebGL 插件"
   );
 
@@ -768,9 +811,11 @@ function setupFrame() {
         const completed = Number(message.completed || 0);
         const total = Number(message.total || 0);
         const path = message.path ? `：${message.path}` : "";
+        const percent = formatPercent(completed, total);
+        const action = message.reused ? "已复用本地缓存" : "正在准备插件资源";
         setLoadingShield(
           true,
-          `正在准备插件资源 ${completed}/${total}${path}。首次加载 Unity 大包会较慢，请勿退出或重复操作。`,
+          `${percent} ${action} ${completed}/${total}${path}。首次加载 Unity 大包会较慢，请勿退出或重复操作。`,
           "正在缓存 WebGL 插件"
         );
       }

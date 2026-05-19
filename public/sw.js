@@ -1,4 +1,4 @@
-const WEBGL_PREVIEW_CACHE_VERSION = "2026.05.18.8";
+const WEBGL_PREVIEW_CACHE_VERSION = "2026.05.19.1";
 const WEBGL_PREVIEW_CACHE_PREFIX = "xrugc-webgl-preview-";
 const WEBGL_PREVIEW_CACHE_NAME =
   WEBGL_PREVIEW_CACHE_PREFIX + WEBGL_PREVIEW_CACHE_VERSION;
@@ -16,8 +16,7 @@ const CACHEABLE_PATHS = [
 ];
 
 const WARM_CACHEABLE_PATHS = [
-  "Build/public.loader.js",
-  "Build/public.framework.js.gz",
+  ...CORE_BUILD_PATHS,
   "TemplateData/style.css",
   "TemplateData/favicon.ico",
 ];
@@ -112,6 +111,12 @@ const fetchAndWarmCache = async (cache, request, signal) => {
   }
 };
 
+const copyCachedResponse = async (cache, request, response) => {
+  if (!response) return false;
+  await cache.put(stableRequestFor(request), response.clone());
+  return true;
+};
+
 const warmPreviewCache = async (clientId) => {
   if (warmAbortController) {
     warmAbortController.abort();
@@ -138,6 +143,20 @@ const warmPreviewCache = async (clientId) => {
       });
       const cached = await cacheMatchPath(cache, request);
       if (!cached) {
+        const previousCached = await findCompleteCachedResponse(request, {
+          excludeCurrent: true,
+        });
+        if (previousCached) {
+          await copyCachedResponse(cache, request, previousCached);
+          await postCacheStatus(clientId, {
+            status: "progress",
+            completed: index + 1,
+            total,
+            path,
+            reused: true,
+          });
+          continue;
+        }
         await postCacheStatus(clientId, {
           status: "fetching",
           completed: index,
