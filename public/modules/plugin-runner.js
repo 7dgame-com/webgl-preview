@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.20.1";
+const WEBGL_PREVIEW_VERSION = "2026.05.20.2";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -270,18 +270,34 @@ function setLoadingProgress(percentText, { indeterminate = false } = {}) {
   elements.loadingProgressText.textContent = `${percent}%`;
 }
 
+function clearLoadingProgress() {
+  elements.loadingProgress.hidden = true;
+  elements.loadingProgress.dataset.mode = "";
+  elements.loadingProgressBar.style.width = "0%";
+  elements.loadingProgressText.textContent = "0%";
+}
+
+function shouldShowLoadingProgress() {
+  return (
+    state.sceneResourceLoading ||
+    state.sceneLoading ||
+    state.cacheActive ||
+    state.busy ||
+    (!elements.loadingShield.hidden &&
+      !state.frameReady &&
+      elements.status.dataset.tone !== "ready")
+  );
+}
+
 function renderControls() {
   const isActive = state.busy || state.running;
   const isLoading = !elements.loadingShield.hidden || state.sceneResourceLoading;
-  const shouldShowProgress =
-    state.sceneResourceLoading ||
-    (!elements.loadingShield.hidden && (state.cacheActive || state.busy || state.sceneLoading));
   if (elements.idleHint) {
     elements.idleHint.hidden =
       state.running && !state.sceneLoading && !state.sceneResourceLoading && !isLoading;
   }
   if (elements.loadingProgress) {
-    elements.loadingProgress.hidden = !shouldShowProgress;
+    elements.loadingProgress.hidden = !shouldShowLoadingProgress();
   }
   elements.sceneField.hidden = isActive;
   elements.run.hidden = isActive;
@@ -301,10 +317,7 @@ function setLoadingShield(visible, detail, title) {
     setLoadingProgress(detail || "");
   } else {
     if (!state.sceneResourceLoading) {
-      elements.loadingProgress.hidden = true;
-      elements.loadingProgressBar.style.width = "0%";
-      elements.loadingProgressText.textContent = "0%";
-      elements.loadingProgress.dataset.mode = "";
+      clearLoadingProgress();
     }
   }
   renderControls();
@@ -1065,6 +1078,7 @@ function setupFrame() {
       log(t("runnerReady"));
       if (!state.running) {
         setStatus(t("enterSceneId"), "ready");
+        clearLoadingProgress();
       }
       if (state.payload) {
         sendPayloadToUnity(state.payload);
@@ -1084,7 +1098,7 @@ function setupFrame() {
         return;
       }
       state.sceneResourceLoading = false;
-      setLoadingProgress("0%");
+      clearLoadingProgress();
       setStatus(t("running"), "running");
       hideLoadingShieldIfReady();
       renderControls();

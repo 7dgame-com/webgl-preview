@@ -345,6 +345,10 @@ input {
   margin-top: -12px;
 }
 
+.idle-stack:has(.status[data-tone="ready"]) .loading-progress {
+  display: none;
+}
+
 .loading-progress-track {
   width: 100%;
   height: 8px;
