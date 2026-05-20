@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.20.2";
+const WEBGL_PREVIEW_VERSION = "2026.05.20.3";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -125,6 +125,8 @@ const state = {
   busy: false,
   sceneLoading: false,
   sceneResourceLoading: false,
+  sceneResourceProgressTimer: 0,
+  sceneResourceProgressStartedAt: 0,
   cacheActive: false,
   frameSession: "",
   runSerial: 0,
@@ -270,7 +272,46 @@ function setLoadingProgress(percentText, { indeterminate = false } = {}) {
   elements.loadingProgressText.textContent = `${percent}%`;
 }
 
+function stopSceneResourceProgress() {
+  if (state.sceneResourceProgressTimer) {
+    window.clearInterval(state.sceneResourceProgressTimer);
+    state.sceneResourceProgressTimer = 0;
+  }
+  state.sceneResourceProgressStartedAt = 0;
+}
+
+function estimateSceneResourceProgress() {
+  if (!state.sceneResourceProgressStartedAt) return 8;
+  const elapsedSeconds = Math.max(
+    0,
+    (performance.now() - state.sceneResourceProgressStartedAt) / 1000
+  );
+  return Math.min(
+    94,
+    Math.max(8, Math.round(8 + 86 * (1 - Math.exp(-elapsedSeconds / 9))))
+  );
+}
+
+function updateSceneResourceProgress() {
+  if (!state.sceneResourceLoading) {
+    stopSceneResourceProgress();
+    return;
+  }
+  setLoadingProgress(`${estimateSceneResourceProgress()}%`);
+}
+
+function startSceneResourceProgress() {
+  stopSceneResourceProgress();
+  state.sceneResourceProgressStartedAt = performance.now();
+  setLoadingProgress("8%");
+  state.sceneResourceProgressTimer = window.setInterval(
+    updateSceneResourceProgress,
+    500
+  );
+}
+
 function clearLoadingProgress() {
+  stopSceneResourceProgress();
   elements.loadingProgress.hidden = true;
   elements.loadingProgress.dataset.mode = "";
   elements.loadingProgressBar.style.width = "0%";
@@ -304,8 +345,8 @@ function renderControls() {
   elements.stop.hidden = !isActive;
   elements.reload.hidden = !isActive;
   elements.run.disabled = state.busy;
-  elements.stop.disabled = (state.busy && state.stopped) || isLoading;
-  elements.reload.disabled = state.busy || isLoading;
+  elements.stop.disabled = state.busy && state.stopped;
+  elements.reload.disabled = state.busy && !state.sceneResourceLoading;
 }
 
 function setLoadingShield(visible, detail, title) {
@@ -1089,7 +1130,7 @@ function setupFrame() {
       state.sceneLoading = false;
       state.sceneResourceLoading = true;
       setStatus(t("sceneResourceLoading"), "busy");
-      setLoadingProgress("", { indeterminate: true });
+      startSceneResourceProgress();
       hideLoadingShieldIfReady();
       log(t("runnerAccepted"), { length: message.length });
     }
@@ -1098,6 +1139,7 @@ function setupFrame() {
         return;
       }
       state.sceneResourceLoading = false;
+      setLoadingProgress("100%");
       clearLoadingProgress();
       setStatus(t("running"), "running");
       hideLoadingShieldIfReady();
@@ -1149,15 +1191,34 @@ function setupFrame() {
 }
 
 function toggleFullscreenPreview() {
-  const target = document.querySelector(".viewer");
-  if (!target) return;
+  const target = document.querySelector(".viewer") || document.documentElement;
+  const postHostFullscreenRequest = () => {
+    if (window.parent && window.parent !== window) {
+      const payload = {
+        type: "webgl-preview-request-fullscreen",
+        source: "webgl-preview",
+        plugin: PLUGIN_ID,
+      };
+      window.parent.postMessage(payload, "*");
+      window.parent.postMessage(
+        { ...payload, type: "plugin-request-fullscreen" },
+        "*"
+      );
+    }
+  };
   if (document.fullscreenElement) {
     document.exitFullscreen().catch(() => {});
     return;
   }
   if (target.requestFullscreen) {
-    target.requestFullscreen().catch(() => {});
+    const request = target.requestFullscreen({ navigationUI: "hide" });
+    if (request && typeof request.catch === "function") {
+      request.catch(postHostFullscreenRequest);
+    }
+    postHostFullscreenRequest();
+    return;
   }
+  postHostFullscreenRequest();
 }
 
 function setupControls() {

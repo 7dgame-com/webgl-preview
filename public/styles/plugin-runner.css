@@ -303,6 +303,23 @@ input {
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.18);
 }
 
+.viewer:fullscreen {
+  padding: 0;
+  background: #101821;
+}
+
+.viewer:fullscreen .preview-surface,
+.viewer:fullscreen .idle-hint {
+  inset: 0;
+  border-radius: 0;
+  clip-path: none;
+}
+
+.viewer:fullscreen .fullscreen-button {
+  top: 16px;
+  right: 16px;
+}
+
 .idle-hint {
   position: absolute;
   inset: 12px;
