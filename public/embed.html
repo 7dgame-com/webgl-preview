@@ -120,7 +120,7 @@
         updateBannerVisibility();
       }
 
-      var webPreviewBuildCacheVersion = "2026.05.20.3";
+      var webPreviewBuildCacheVersion = "2026.05.20.4";
       var webPreviewCacheStartupTimeoutMs = 10000;
       var buildUrl = "Build";
       function withBuildCacheVersion(url) {
@@ -626,7 +626,13 @@
             return url;
           }
 
-          return getProxyOrigin() + "/__xrugc_proxy__?url=" + normalizedUrl;
+          return (
+            getProxyOrigin() +
+            "/__xrugc_proxy__?url=" +
+            normalizedUrl +
+            "&v=" +
+            encodeURIComponent(webPreviewBuildCacheVersion)
+          );
         }
 
         function normalizeVideoUrl(value) {
