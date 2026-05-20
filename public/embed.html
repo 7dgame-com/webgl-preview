@@ -120,7 +120,7 @@
         updateBannerVisibility();
       }
 
-      var webPreviewBuildCacheVersion = "2026.05.20.6";
+      var webPreviewBuildCacheVersion = "2026.05.20.7";
       var webPreviewCacheStartupTimeoutMs = 10000;
       var buildUrl = "Build";
       function withBuildCacheVersion(url) {
@@ -280,6 +280,16 @@
         }, "*");
       }
 
+      function isWebPreviewSceneRuntimeLog(message) {
+        return (
+          message.indexOf("[WebPreview][LuaTask] execute start") !== -1 ||
+          message.indexOf("[WebPreview][LuaTask] Execute completed") !== -1 ||
+          message.indexOf("[WebPreview][ScriptProbe] init body exit") !== -1 ||
+          message.indexOf("[WebPreview][SoundEntity] playTask") !== -1 ||
+          message.indexOf("[WebPreview][SoundEntity] play ignored") !== -1
+        );
+      }
+
       (function installWebPreviewSceneLogObserver() {
         var originalLog = console.log;
         console.log = function() {
@@ -288,6 +298,8 @@
             first.indexOf("[WebPreview] Scene content bounds:") !== -1 &&
             /(?:hasBounds=True|hasBounds=true|renderers=[1-9]\d*)/.test(first)
           ) {
+            notifyWebPreviewSceneVisible(first);
+          } else if (isWebPreviewSceneRuntimeLog(first)) {
             notifyWebPreviewSceneVisible(first);
           }
           return originalLog.apply(console, arguments);
