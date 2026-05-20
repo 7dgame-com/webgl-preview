@@ -49,6 +49,7 @@ input {
 
 .topbar {
   position: relative;
+  z-index: 30;
   display: grid;
   grid-template-columns: minmax(260px, 1fr) auto minmax(260px, 1fr);
   align-items: center;
@@ -202,8 +203,8 @@ input {
 }
 
 .help-button {
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border: 1px solid var(--control-border);
   border-radius: 50%;
@@ -213,7 +214,7 @@ input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  font-size: 12px;
   font-weight: 750;
   line-height: 1;
   box-shadow: 0 2px 8px rgba(36, 61, 92, 0.06);
@@ -236,8 +237,8 @@ input {
 .help-popover {
   position: absolute;
   top: calc(100% + 10px);
-  left: 0;
-  z-index: 20;
+  left: 50%;
+  z-index: 40;
   width: 236px;
   padding: 12px 14px;
   border: 1px solid rgba(148, 163, 184, 0.28);
@@ -247,7 +248,7 @@ input {
   box-shadow: 0 16px 36px rgba(14, 29, 46, 0.22);
   opacity: 0;
   pointer-events: none;
-  transform: translateY(-4px);
+  transform: translate(-50%, -4px);
   transition:
     opacity 0.14s ease,
     transform 0.14s ease;
@@ -257,7 +258,7 @@ input {
   content: "";
   position: absolute;
   top: -6px;
-  left: 12px;
+  left: calc(50% - 5px);
   width: 10px;
   height: 10px;
   border-left: 1px solid rgba(148, 163, 184, 0.28);
@@ -270,7 +271,7 @@ input {
 .help-control:focus-within .help-popover {
   opacity: 1;
   pointer-events: auto;
-  transform: translateY(0);
+  transform: translate(-50%, 0);
 }
 
 .help-popover-title {

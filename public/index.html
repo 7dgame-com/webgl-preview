@@ -7,7 +7,7 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <title>WebGL</title>
-    <link rel="stylesheet" href="./styles/plugin-runner.css?v=2026.05.20.6" />
+    <link rel="stylesheet" href="./styles/plugin-runner.css?v=2026.05.20.7" />
   </head>
   <body>
     <main class="app-shell">
@@ -36,7 +36,7 @@
             <span class="button-icon" aria-hidden="true">↻</span>
             <span data-i18n="rerun">重跑</span>
           </button>
-          <div class="help-control">
+          <div class="help-control" data-help-control hidden>
             <button
               class="help-button"
               type="button"
@@ -48,10 +48,9 @@
             <div class="help-popover" role="tooltip">
               <div class="help-popover-title" data-i18n="helpTitle">操作说明</div>
               <div class="help-popover-list">
-                <div data-i18n="helpClick">单击画面后可操作场景</div>
+                <div data-i18n="helpClick">单击或长按鼠标左键可进行点击与拖拽物体操作</div>
                 <div data-i18n="helpRotate">按住 Alt + 鼠标左键旋转视角</div>
                 <div data-i18n="helpZoomPan">滚轮缩放视角，右键平移视角</div>
-                <div data-i18n="helpFullscreen">全屏可获得更完整预览</div>
               </div>
             </div>
           </div>
@@ -119,6 +118,6 @@
       </section>
     </main>
 
-    <script type="module" src="./modules/plugin-runner.js?v=2026.05.20.6"></script>
+    <script type="module" src="./modules/plugin-runner.js?v=2026.05.20.7"></script>
   </body>
 </html>

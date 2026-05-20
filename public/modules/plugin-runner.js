@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.20.6";
+const WEBGL_PREVIEW_VERSION = "2026.05.20.7";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -24,10 +24,9 @@ const I18N = {
     stop: "停止",
     rerun: "重跑",
     helpTitle: "操作说明",
-    helpClick: "单击画面后可操作场景",
+    helpClick: "单击或长按鼠标左键可进行点击与拖拽物体操作",
     helpRotate: "按住 Alt + 鼠标左键旋转视角",
     helpZoomPan: "滚轮缩放视角，右键平移视角",
-    helpFullscreen: "全屏可获得更完整预览",
     configured: "已配置",
     notConfigured: "未配置",
     enterSceneId: "请输入场景号",
@@ -78,10 +77,9 @@ const I18N = {
     stop: "Stop",
     rerun: "Rerun",
     helpTitle: "Help",
-    helpClick: "Click the view to control the scene",
+    helpClick: "Click or hold the left mouse button to click and drag objects",
     helpRotate: "Hold Alt + left mouse button to rotate",
     helpZoomPan: "Use the wheel to zoom, right mouse button to pan",
-    helpFullscreen: "Use fullscreen for a fuller preview",
     configured: "Configured",
     notConfigured: "Not configured",
     enterSceneId: "Enter a scene ID",
@@ -151,6 +149,7 @@ const elements = {
   run: document.querySelector("[data-run]"),
   stop: document.querySelector("[data-stop]"),
   reload: document.querySelector("[data-reload]"),
+  helpControl: document.querySelector("[data-help-control]"),
   fullscreen: document.querySelector("[data-fullscreen]"),
   tokenInput: document.querySelector("[data-token-input]"),
   saveToken: document.querySelector("[data-save-token]"),
@@ -354,6 +353,7 @@ function renderControls() {
   elements.run.hidden = isActive;
   elements.stop.hidden = !isActive;
   elements.reload.hidden = !isActive;
+  elements.helpControl.hidden = !isActive;
   elements.run.disabled = state.busy;
   elements.stop.disabled = state.busy && state.stopped;
   elements.reload.disabled = state.busy && !state.sceneResourceLoading;
