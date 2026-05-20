@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.20.5";
+const WEBGL_PREVIEW_VERSION = "2026.05.20.6";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -23,6 +23,11 @@ const I18N = {
     run: "运行",
     stop: "停止",
     rerun: "重跑",
+    helpTitle: "操作说明",
+    helpClick: "单击画面后可操作场景",
+    helpRotate: "按住 Alt + 鼠标左键旋转视角",
+    helpZoomPan: "滚轮缩放视角，右键平移视角",
+    helpFullscreen: "全屏可获得更完整预览",
     configured: "已配置",
     notConfigured: "未配置",
     enterSceneId: "请输入场景号",
@@ -72,6 +77,11 @@ const I18N = {
     run: "Run",
     stop: "Stop",
     rerun: "Rerun",
+    helpTitle: "Help",
+    helpClick: "Click the view to control the scene",
+    helpRotate: "Hold Alt + left mouse button to rotate",
+    helpZoomPan: "Use the wheel to zoom, right mouse button to pan",
+    helpFullscreen: "Use fullscreen for a fuller preview",
     configured: "Configured",
     notConfigured: "Not configured",
     enterSceneId: "Enter a scene ID",
