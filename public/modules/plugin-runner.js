@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.19.18";
+const WEBGL_PREVIEW_VERSION = "2026.05.20.1";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -275,8 +275,7 @@ function renderControls() {
   const isLoading = !elements.loadingShield.hidden || state.sceneResourceLoading;
   const shouldShowProgress =
     state.sceneResourceLoading ||
-    (!elements.loadingShield.hidden &&
-      (state.cacheActive || state.busy || state.sceneLoading || !state.frameReady));
+    (!elements.loadingShield.hidden && (state.cacheActive || state.busy || state.sceneLoading));
   if (elements.idleHint) {
     elements.idleHint.hidden =
       state.running && !state.sceneLoading && !state.sceneResourceLoading && !isLoading;
