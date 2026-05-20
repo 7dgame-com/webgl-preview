@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.20.4";
+const WEBGL_PREVIEW_VERSION = "2026.05.20.5";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -1225,7 +1225,7 @@ function setupControls() {
   elements.run.addEventListener("click", runScene);
   elements.stop.addEventListener("click", stopScene);
   elements.reload.addEventListener("click", rerunScene);
-  elements.fullscreen.addEventListener("click", toggleFullscreenPreview);
+  elements.fullscreen?.addEventListener("click", toggleFullscreenPreview);
   elements.saveToken.addEventListener("click", () => {
     setToken(elements.tokenInput.value, { persist: true });
     log(state.token ? t("tokenSaved") : t("tokenCleared"));
