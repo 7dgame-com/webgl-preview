@@ -120,7 +120,7 @@
         updateBannerVisibility();
       }
 
-      var webPreviewBuildCacheVersion = "2026.05.20.6";
+      var webPreviewBuildCacheVersion = "2026.05.20.5";
       var webPreviewCacheStartupTimeoutMs = 10000;
       var buildUrl = "Build";
       function withBuildCacheVersion(url) {
@@ -371,8 +371,7 @@
             if (
               parsed.protocol === "https:" &&
               (parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost") &&
-              (parsed.pathname === "/__xrugc_proxy__" ||
-                parsed.pathname.indexOf("/__xrugc_proxy__/") === 0)
+              parsed.pathname === "/__xrugc_proxy__"
             ) {
               var host = parsed.host || window.location.host || "127.0.0.1:8080";
               if (host === "localhost:8080") {
@@ -612,10 +611,7 @@
           var normalizedUrl = normalizeRemoteAssetUrl(url);
           try {
             var parsed = new URL(normalizedUrl);
-            if (
-              parsed.pathname === "/__xrugc_proxy__" ||
-              parsed.pathname.indexOf("/__xrugc_proxy__/") === 0
-            ) {
+            if (parsed.pathname === "/__xrugc_proxy__") {
               return getProxyOrigin() + parsed.pathname + parsed.search;
             }
 
@@ -632,25 +628,11 @@
 
           return (
             getProxyOrigin() +
-            getProxyPath(normalizedUrl) +
-            "?url=" +
+            "/__xrugc_proxy__?url=" +
             normalizedUrl +
             "&v=" +
             encodeURIComponent(webPreviewBuildCacheVersion)
           );
-        }
-
-        function getProxyPath(url) {
-          try {
-            var parsed = new URL(url.replace(/\\\//g, "/"));
-            var filename = decodeURIComponent(parsed.pathname.split("/").pop() || "");
-            if (filename && /\.[a-z0-9]{2,8}$/i.test(filename)) {
-              return "/__xrugc_proxy__/" + encodeURIComponent(filename);
-            }
-          } catch (error) {
-            // Fall through to the extensionless proxy path.
-          }
-          return "/__xrugc_proxy__";
         }
 
         function normalizeVideoUrl(value) {

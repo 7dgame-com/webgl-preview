@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.20.6";
+const WEBGL_PREVIEW_VERSION = "2026.05.20.5";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -692,21 +692,8 @@ function normalizeUnityPreviewVideoUrl(value) {
   }
 }
 
-function getUnityPreviewProxyPath(value) {
-  try {
-    const url = new URL(value.replace(/\\\//g, "/"));
-    const filename = decodeURIComponent(url.pathname.split("/").pop() || "");
-    if (filename && /\.[a-z0-9]{2,8}$/i.test(filename)) {
-      return `/__xrugc_proxy__/${encodeURIComponent(filename)}`;
-    }
-  } catch {
-    // Fall through to the extensionless proxy path.
-  }
-  return "/__xrugc_proxy__";
-}
-
 function toUnityPreviewProxyRequestUrl(value, proxyOrigin) {
-  return `${proxyOrigin}${getUnityPreviewProxyPath(value)}?url=${normalizeUnityPreviewRemoteAssetUrl(
+  return `${proxyOrigin}/__xrugc_proxy__?url=${normalizeUnityPreviewRemoteAssetUrl(
     value
   )}&v=${encodeURIComponent(WEBGL_PREVIEW_VERSION)}`;
 }
@@ -754,10 +741,7 @@ function toUnityPreviewProxyUrl(value, proxyOrigin, assetBaseOrigin) {
 
   try {
     const url = new URL(normalizedValue);
-    if (
-      url.pathname === "/__xrugc_proxy__" ||
-      url.pathname.startsWith("/__xrugc_proxy__/")
-    ) {
+    if (url.pathname === "/__xrugc_proxy__") {
       return `${proxyOrigin}${url.pathname}${url.search}`;
     }
     if (url.origin === proxyOrigin) return normalizedValue;
