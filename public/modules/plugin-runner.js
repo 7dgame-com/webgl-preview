@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.21.12";
+const WEBGL_PREVIEW_VERSION = "2026.05.21.13";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -289,6 +289,7 @@ const state = {
   pendingRun: false,
   stopped: false,
   running: false,
+  sceneVisible: false,
   busy: false,
   sceneLoading: false,
   sceneResourceLoading: false,
@@ -391,7 +392,7 @@ function refreshStatusForLocale() {
     return;
   }
   if (state.running) {
-    setStatus(t("running"), "running");
+    setStatus("", "");
     return;
   }
   if (
@@ -596,6 +597,11 @@ function clearLoadingProgress() {
 }
 
 function shouldShowLoadingProgress() {
+  const tone = elements.status.dataset.tone || "";
+  if (tone === "ready" || tone === "error" || tone === "running") {
+    return false;
+  }
+
   return (
     state.sceneResourceLoading ||
     state.sceneLoading ||
@@ -609,10 +615,9 @@ function shouldShowLoadingProgress() {
 
 function renderControls() {
   const isActive = state.busy || state.running;
-  const isLoading = !elements.loadingShield.hidden || state.sceneResourceLoading;
   if (elements.idleHint) {
     elements.idleHint.hidden =
-      state.running && !state.sceneLoading && !state.sceneResourceLoading && !isLoading;
+      state.running && !state.sceneLoading && !state.sceneResourceLoading;
   }
   if (elements.loadingProgress) {
     elements.loadingProgress.hidden = !shouldShowLoadingProgress();
@@ -1332,6 +1337,7 @@ function unloadUnityFrame() {
   state.frameReady = false;
   state.pendingRun = false;
   state.cacheActive = false;
+  state.sceneVisible = false;
   state.frameSession = "";
   state.payload = null;
   elements.frame.src = "about:blank";
@@ -1341,12 +1347,19 @@ async function runScene() {
   const sceneId = Number(elements.sceneId.value);
   if (!Number.isFinite(sceneId) || sceneId <= 0) {
     setStatus(t("enterValidSceneId"), "error");
+    state.sceneLoading = false;
+    state.sceneResourceLoading = false;
+    state.cacheActive = false;
+    setLoadingShield(false);
+    clearLoadingProgress();
+    renderControls();
     elements.sceneId.focus();
     return;
   }
 
   const runSerial = startRunAttempt();
   state.payload = null;
+  state.sceneVisible = false;
   state.sceneResourceLoading = false;
   if (isUnityFrameStopped() || !state.frameReady) {
     loadUnityFrame();
@@ -1429,6 +1442,7 @@ function stopScene() {
   startRunAttempt();
   state.stopped = true;
   state.running = false;
+  state.sceneVisible = false;
   state.sceneLoading = false;
   state.sceneResourceLoading = false;
   unloadUnityFrame();
@@ -1490,15 +1504,19 @@ function setupFrame() {
       if (!state.running) {
         return;
       }
+      state.sceneVisible = true;
+      state.sceneLoading = false;
       state.sceneResourceLoading = false;
-      setLoadingProgress("100%");
+      setLoadingShield(false);
       clearLoadingProgress();
-      setStatus(t("running"), "running");
-      hideLoadingShieldIfReady();
       renderControls();
     }
     if (message.type === "webgl-preview-loading") {
       if (message.visible) {
+        if (state.sceneVisible) {
+          setLoadingShield(false);
+          return;
+        }
         setRemoteLoadingShield(message);
       } else {
         hideLoadingShieldIfReady();
