@@ -158,7 +158,7 @@ function resolveFile(urlPath) {
 const server = http.createServer((req, res) => {
   const url = new URL(req.url || '/', `http://${req.headers.host || `${host}:${port}`}`);
 
-  if (url.pathname === '/__xrugc_proxy__' || url.pathname.startsWith('/__xrugc_proxy__/')) {
+  if (url.pathname === '/__xrugc_proxy__') {
     proxyRemoteAsset(req, res, url.searchParams.get('url') || '');
     return;
   }

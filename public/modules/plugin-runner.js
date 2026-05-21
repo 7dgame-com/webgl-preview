@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.21.05";
+const WEBGL_PREVIEW_VERSION = "2026.05.20.7";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -10,7 +10,6 @@ const LEGACY_COS_HOST =
 const CDN_HOST = "data.7dgame.com";
 const ASSET_PATH_RE =
   /\.(?:png|jpe?g|gif|webp|bmp|svg|mp3|wav|ogg|m4a|mp4|webm|glb|gltf|fbx|obj|vox)(?:[?#]|$)/i;
-const AUDIO_ASSET_PATH_RE = /\.(?:mp3|wav|ogg|m4a|aac|flac)(?:[?#]|$)/i;
 const VIDEO_PATH_RE = /\.(?:mp4|webm)(?:[?#]|$)/i;
 const LOCAL_TOKEN_STORAGE_KEY = "xrugc.webglPreview.token";
 
@@ -899,15 +898,9 @@ function normalizeUnityPreviewVideoUrl(value) {
 }
 
 function toUnityPreviewProxyRequestUrl(value, proxyOrigin) {
-  const normalizedRemoteUrl = normalizeUnityPreviewRemoteAssetUrl(value);
-  const proxyPath = AUDIO_ASSET_PATH_RE.test(normalizedRemoteUrl)
-    ? `/__xrugc_proxy__/asset${
-        normalizedRemoteUrl.match(AUDIO_ASSET_PATH_RE)[0].replace(/[?#].*$/, "").toLowerCase()
-      }`
-    : "/__xrugc_proxy__";
-  return `${proxyOrigin}${proxyPath}?url=${normalizedRemoteUrl}&v=${encodeURIComponent(
-    WEBGL_PREVIEW_VERSION
-  )}`;
+  return `${proxyOrigin}/__xrugc_proxy__?url=${normalizeUnityPreviewRemoteAssetUrl(
+    value
+  )}&v=${encodeURIComponent(WEBGL_PREVIEW_VERSION)}`;
 }
 
 function toUnityPreviewAssetUrl(value, proxyOrigin) {
@@ -953,7 +946,7 @@ function toUnityPreviewProxyUrl(value, proxyOrigin, assetBaseOrigin) {
 
   try {
     const url = new URL(normalizedValue);
-    if (url.pathname.startsWith("/__xrugc_proxy__")) {
+    if (url.pathname === "/__xrugc_proxy__") {
       return `${proxyOrigin}${url.pathname}${url.search}`;
     }
     if (url.origin === proxyOrigin) return normalizedValue;
