@@ -5,7 +5,7 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Unity Web Player | Web Preview</title>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
-    <link rel="stylesheet" href="TemplateData/style.css?v=2026.05.21.04">
+    <link rel="stylesheet" href="TemplateData/style.css?v=2026.05.20.7">
   </head>
   <body>
     <div id="unity-container" class="unity-desktop">
@@ -43,103 +43,6 @@
       var webPreviewRuntimeProgressDisplayed = 0;
       var webPreviewParams = new URLSearchParams(window.location.search);
       var webPreviewSession = webPreviewParams.get("session") || "";
-      var webPreviewVerboseConsole =
-        /^(1|true|yes)$/i.test(webPreviewParams.get("debug") || "") ||
-        /^(1|true|yes)$/i.test(webPreviewParams.get("verbose") || "");
-
-      (function installWebPreviewConsoleFilter() {
-        if (webPreviewVerboseConsole || window.__webPreviewConsoleFilterInstalled) {
-          return;
-        }
-        window.__webPreviewConsoleFilterInstalled = true;
-
-        var originalConsole = {
-          log: console.log.bind(console),
-          info: console.info ? console.info.bind(console) : console.log.bind(console),
-          warn: console.warn.bind(console),
-          debug: console.debug ? console.debug.bind(console) : console.log.bind(console)
-        };
-
-        var noisyPatterns = [
-          /AudioContext was not allowed to start/i,
-          /WebGL:\s*INVALID_ENUM:\s*getInternalformatParameter/i,
-          /^Shader Graphs\//i,
-          /^Legacy Shaders\//i,
-          /^Universal Render Pipeline\//i,
-          /^Hidden\/(?:CoreSRP|Universal)/i,
-          /^LUA:/i,
-          /^Trying to get length of sound which is not loaded yet/i,
-          /^The referenced script .* is missing/i,
-          /^Manual synchronization of Unity Application\.persistentDataPath/i,
-          /^No active UnityEngine\./i,
-          /^ARAnchor component on .* failed to add itself/i,
-          /^\[UnityMemory\]/i,
-          /^memorysetup-/i,
-          /^Input (?:Manager|System|System module state)/i,
-          /^Creating WebGL/i,
-          /^(?:Renderer|Vendor|Version|GLES):/i,
-          /^OPENGL LOG:/i,
-          /^\[Physics::Module\]/i,
-          /^\[Subsystems\]/i,
-          /^UnloadTime:/i,
-          /^ThreadLog initialized/i,
-          /^Application resumed/i,
-          /^TelepathyTransport initialized/i,
-          /^No Transport assigned to Network Manager/i,
-          /^\[MRTKLifecycleManager\]/i,
-          /^\[3D WebView\]/i,
-          /^Unknown DisplayType value/i,
-          /^\[GestureManager\]/i,
-          /^\[WebPreview\](?:\[| )/i
-        ];
-
-        var importantPatterns = [
-          /failed|error|exception|abort|uncaught|denied|400|401|403|404|500/i,
-          /Failed to send scene json/i,
-          /Texture2DWeb.*failed/i,
-          /Audio download returned no clip/i
-        ];
-
-        function stringifyConsoleArgs(args) {
-          return Array.prototype.map.call(args, function(value) {
-            if (typeof value === "string") {
-              return value;
-            }
-            if (value && value.message) {
-              return value.message;
-            }
-            try {
-              return JSON.stringify(value);
-            } catch (error) {
-              return String(value);
-            }
-          }).join(" ");
-        }
-
-        function shouldSuppressConsole(level, args) {
-          if (level === "error") {
-            return false;
-          }
-          var text = stringifyConsoleArgs(args).trim();
-          if (!text) {
-            return false;
-          }
-          if (importantPatterns.some(function(pattern) { return pattern.test(text); })) {
-            return false;
-          }
-          return noisyPatterns.some(function(pattern) { return pattern.test(text); });
-        }
-
-        ["log", "info", "warn", "debug"].forEach(function(level) {
-          console[level] = function() {
-            if (shouldSuppressConsole(level, arguments)) {
-              return;
-            }
-            originalConsole[level].apply(console, arguments);
-          };
-        });
-      })();
-
       function normalizeWebPreviewLocale(value) {
         var lang = String(value || navigator.language || "zh-CN")
           .toLowerCase()
@@ -323,7 +226,7 @@
         updateBannerVisibility();
       }
 
-      var webPreviewBuildCacheVersion = "2026.05.21.04";
+      var webPreviewBuildCacheVersion = "2026.05.20.7";
       var webPreviewCacheStartupTimeoutMs = 10000;
       var buildUrl = "Build";
       function withBuildCacheVersion(url) {
@@ -574,7 +477,7 @@
             if (
               parsed.protocol === "https:" &&
               (parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost") &&
-              parsed.pathname.startsWith("/__xrugc_proxy__")
+              parsed.pathname === "/__xrugc_proxy__"
             ) {
               var host = parsed.host || window.location.host || "127.0.0.1:8080";
               if (host === "localhost:8080") {
@@ -814,7 +717,7 @@
           var normalizedUrl = normalizeRemoteAssetUrl(url);
           try {
             var parsed = new URL(normalizedUrl);
-            if (parsed.pathname.startsWith("/__xrugc_proxy__")) {
+            if (parsed.pathname === "/__xrugc_proxy__") {
               return getProxyOrigin() + parsed.pathname + parsed.search;
             }
 
@@ -831,22 +734,11 @@
 
           return (
             getProxyOrigin() +
-            getProxiedAssetPath(normalizedUrl) +
-            "?url=" +
+            "/__xrugc_proxy__?url=" +
             normalizedUrl +
             "&v=" +
             encodeURIComponent(webPreviewBuildCacheVersion)
           );
-        }
-
-        function getProxiedAssetPath(url) {
-          try {
-            var parsed = new URL(normalizeRemoteAssetUrl(url));
-            var extensionMatch = parsed.pathname.match(/\.([a-z0-9]+)$/i);
-            return "/__xrugc_proxy__/asset" + (extensionMatch ? extensionMatch[0].toLowerCase() : "");
-          } catch (error) {
-            return "/__xrugc_proxy__";
-          }
         }
 
         function normalizeVideoUrl(value) {

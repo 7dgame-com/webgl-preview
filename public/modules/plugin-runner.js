@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.21.04";
+const WEBGL_PREVIEW_VERSION = "2026.05.20.7";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -897,19 +897,10 @@ function normalizeUnityPreviewVideoUrl(value) {
   }
 }
 
-function proxiedAssetPathFor(value) {
-  try {
-    const url = new URL(normalizeUnityPreviewRemoteAssetUrl(value));
-    const extension = url.pathname.match(/\.([a-z0-9]+)$/i)?.[0] || "";
-    return `/__xrugc_proxy__/asset${extension.toLowerCase()}`;
-  } catch {
-    return "/__xrugc_proxy__";
-  }
-}
-
 function toUnityPreviewProxyRequestUrl(value, proxyOrigin) {
-  const normalizedRemoteUrl = normalizeUnityPreviewRemoteAssetUrl(value);
-  return `${proxyOrigin}${proxiedAssetPathFor(normalizedRemoteUrl)}?url=${normalizedRemoteUrl}&v=${encodeURIComponent(WEBGL_PREVIEW_VERSION)}`;
+  return `${proxyOrigin}/__xrugc_proxy__?url=${normalizeUnityPreviewRemoteAssetUrl(
+    value
+  )}&v=${encodeURIComponent(WEBGL_PREVIEW_VERSION)}`;
 }
 
 function toUnityPreviewAssetUrl(value, proxyOrigin) {
@@ -955,7 +946,7 @@ function toUnityPreviewProxyUrl(value, proxyOrigin, assetBaseOrigin) {
 
   try {
     const url = new URL(normalizedValue);
-    if (url.pathname.startsWith("/__xrugc_proxy__")) {
+    if (url.pathname === "/__xrugc_proxy__") {
       return `${proxyOrigin}${url.pathname}${url.search}`;
     }
     if (url.origin === proxyOrigin) return normalizedValue;
@@ -1308,6 +1299,12 @@ function rerunScene() {
 }
 
 function setupFrame() {
+  setLoadingShield(
+    true,
+    t("loadingPluginGuard"),
+    t("loadingPlugin")
+  );
+
   elements.frame.addEventListener("load", () => {
     if (state.stopped || elements.frame.src === "about:blank") {
       return;
@@ -1396,6 +1393,7 @@ function setupFrame() {
       }
     }
   });
+  loadUnityFrame();
 }
 
 function toggleFullscreenPreview() {
@@ -1492,8 +1490,7 @@ function init() {
   setupFrame();
   window.addEventListener("message", handleHostMessage);
   postPluginReady();
-  setStatus(t("enterSceneId"), "ready");
-  setLoadingShield(false);
+  setStatus(t("loadingPlugin"), "busy");
   renderControls();
   log(t("opened"));
 
