@@ -5,7 +5,7 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Unity Web Player | Web Preview</title>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
-    <link rel="stylesheet" href="TemplateData/style.css?v=2026.05.21.09">
+    <link rel="stylesheet" href="TemplateData/style.css?v=2026.05.21.07">
   </head>
   <body>
     <div id="unity-container" class="unity-desktop">
@@ -391,7 +391,7 @@
         updateBannerVisibility();
       }
 
-      var webPreviewBuildCacheVersion = "2026.05.21.09";
+      var webPreviewBuildCacheVersion = "2026.05.21.07";
       var webPreviewCacheStartupTimeoutMs = 10000;
       var buildUrl = "Build";
       function withBuildCacheVersion(url) {
@@ -454,11 +454,6 @@
               });
             }
             webPreviewCacheActive = false;
-            postCacheStatusToParent({
-              type: "webgl-preview-cache-status",
-              status: "cancelled",
-              reason: "timeout"
-            });
             console.warn("[WebPreview] Cache warm timed out. Starting Unity directly.");
             settle();
           }, webPreviewCacheStartupTimeoutMs);

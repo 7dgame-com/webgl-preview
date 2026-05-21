@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.21.09";
+const WEBGL_PREVIEW_VERSION = "2026.05.21.07";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -651,19 +651,6 @@ function hideLoadingShieldIfReady() {
   if (!state.cacheActive && state.frameReady && !state.busy && !state.sceneLoading) {
     setLoadingShield(false);
   }
-}
-
-function markSceneRunning() {
-  state.running = true;
-  state.busy = false;
-  state.sceneLoading = false;
-  state.sceneResourceLoading = false;
-  state.cacheActive = false;
-  setLoadingProgress("100%");
-  clearLoadingProgress();
-  setStatus(t("running"), "running");
-  setLoadingShield(false);
-  renderControls();
 }
 
 function setControlsBusy(isBusy) {
@@ -1423,13 +1410,17 @@ function setupFrame() {
       if (!state.running) {
         return;
       }
-      markSceneRunning();
+      state.sceneResourceLoading = false;
+      setLoadingProgress("100%");
+      clearLoadingProgress();
+      setStatus(t("running"), "running");
+      hideLoadingShieldIfReady();
+      renderControls();
     }
     if (message.type === "webgl-preview-loading") {
       if (message.visible) {
         setRemoteLoadingShield(message);
       } else {
-        state.cacheActive = false;
         hideLoadingShieldIfReady();
       }
     }
