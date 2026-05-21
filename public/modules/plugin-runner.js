@@ -1310,12 +1310,6 @@ function rerunScene() {
 }
 
 function setupFrame() {
-  setLoadingShield(
-    true,
-    t("loadingPluginGuard"),
-    t("loadingPlugin")
-  );
-
   elements.frame.addEventListener("load", () => {
     if (state.stopped || elements.frame.src === "about:blank") {
       return;
@@ -1404,7 +1398,6 @@ function setupFrame() {
       }
     }
   });
-  loadUnityFrame();
 }
 
 function toggleFullscreenPreview() {
@@ -1501,7 +1494,8 @@ function init() {
   setupFrame();
   window.addEventListener("message", handleHostMessage);
   postPluginReady();
-  setStatus(t("loadingPlugin"), "busy");
+  setStatus(t("enterSceneId"), "ready");
+  setLoadingShield(false);
   renderControls();
   log(t("opened"));
 
