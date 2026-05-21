@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.21.07";
+const WEBGL_PREVIEW_VERSION = "2026.05.21.10";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -1081,6 +1081,77 @@ function rewriteUnityPreviewUrls(value, proxyOrigin, assetBaseOrigin) {
   });
 }
 
+function collectSceneResourceCacheUrls(value, urls = new Set()) {
+  if (!value) return urls;
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return urls;
+    try {
+      const url = new URL(trimmed, window.location.origin);
+      if (url.pathname === "/__xrugc_proxy__") {
+        const targetUrl = normalizeUnityPreviewRemoteAssetUrl(
+          url.searchParams.get("url") || ""
+        );
+        if (targetUrl && ASSET_PATH_RE.test(new URL(targetUrl).pathname)) {
+          urls.add(targetUrl);
+        }
+        return urls;
+      }
+
+      if (
+        (url.hostname === CDN_HOST || url.hostname === LEGACY_COS_HOST) &&
+        ASSET_PATH_RE.test(url.pathname)
+      ) {
+        urls.add(normalizeUnityPreviewRemoteAssetUrl(url.toString()));
+      }
+    } catch {
+      // Ignore non-URL strings.
+    }
+    return urls;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectSceneResourceCacheUrls(item, urls));
+    return urls;
+  }
+
+  if (typeof value === "object") {
+    Object.values(value).forEach((item) =>
+      collectSceneResourceCacheUrls(item, urls)
+    );
+  }
+
+  return urls;
+}
+
+function warmSceneResourceCache(payload) {
+  if (!("serviceWorker" in navigator)) return;
+
+  const resources = [...collectSceneResourceCacheUrls(payload)];
+  if (!resources.length) return;
+
+  const message = {
+    type: "warm-webgl-scene-resource-cache",
+    sceneId: payload.scene.id,
+    snapshotId: payload.scene.snapshotId,
+    resources,
+  };
+
+  if (navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage(message);
+    return;
+  }
+
+  navigator.serviceWorker.ready
+    .then((registration) => {
+      if (registration.active) {
+        registration.active.postMessage(message);
+      }
+    })
+    .catch(() => {});
+}
+
 function normalizeUnityPreviewMetas(metas) {
   if (!Array.isArray(metas)) return [];
   return metas.map((meta) => {
@@ -1298,6 +1369,7 @@ async function runScene() {
     }
     state.payload = payload;
     updateSummary(payload);
+    warmSceneResourceCache(payload);
     setStatus(t("sendingUnity"), "busy");
     setLocalizedLoadingShield(true, "startingScene", "startingSceneDetail");
     sendPayloadToUnity(payload);
