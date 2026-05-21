@@ -5,7 +5,7 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Unity Web Player | Web Preview</title>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
-    <link rel="stylesheet" href="TemplateData/style.css?v=2026.05.20.7">
+    <link rel="stylesheet" href="TemplateData/style.css?v=2026.05.21.06">
   </head>
   <body>
     <div id="unity-container" class="unity-desktop">
@@ -43,6 +43,77 @@
       var webPreviewRuntimeProgressDisplayed = 0;
       var webPreviewParams = new URLSearchParams(window.location.search);
       var webPreviewSession = webPreviewParams.get("session") || "";
+      (function installWebPreviewConsoleFilter() {
+        var verbose = /^(1|true|debug|verbose)$/i.test(
+          String(webPreviewParams.get("debug") || webPreviewParams.get("verbose") || "")
+        );
+        if (verbose || window.__xrugcWebPreviewConsoleFilterInstalled) {
+          return;
+        }
+
+        window.__xrugcWebPreviewConsoleFilterInstalled = true;
+        var originalConsole = {
+          log: console.log.bind(console),
+          warn: console.warn.bind(console),
+          error: console.error.bind(console)
+        };
+        var noisyPatterns = [
+          /The AudioContext was not allowed to start/i,
+          /WebGL:\s*INVALID_ENUM:\s*getInternalformatParameter/i,
+          /Manual synchronization of Unity Application\.persistentDataPath/i,
+          /No active UnityEngine\.XR\./i,
+          /ARAnchor component .* failed to add itself to the anchor subsystem/i,
+          /The referenced script .* on this Behaviour .* missing/i,
+          /Trying to get length of sound which is not loaded yet/i,
+          /Unable to determine the audio type from the URL/i,
+          /Audio download returned no clip/i,
+          /^\s*(?:Shader Graphs\/|Legacy Shaders\/|Universal Render Pipeline\/|Hidden\/)/i,
+          /^\s*\[WebPreview\](?:\[| Scene content bounds:| Preview camera ready:| Event block=)/i
+        ];
+        var keepPatterns = [
+          /HTTP\/\d/i,
+          /\b(?:error|failed|exception|abort|denied|unauthorized|forbidden)\b/i,
+          /Failed to send scene json/i,
+          /Scene is running/i,
+          /Scene is visible/i
+        ];
+
+        function stringifyConsoleArgs(args) {
+          return Array.prototype.map.call(args, function(arg) {
+            if (typeof arg === "string") {
+              return arg;
+            }
+            if (arg instanceof Error) {
+              return arg.message || String(arg);
+            }
+            try {
+              return JSON.stringify(arg);
+            } catch (error) {
+              return String(arg);
+            }
+          }).join(" ");
+        }
+
+        function shouldSuppress(args, level) {
+          var text = stringifyConsoleArgs(args);
+          if (!text) {
+            return false;
+          }
+          if (level === "error" && keepPatterns.some(function(pattern) { return pattern.test(text); })) {
+            return false;
+          }
+          return noisyPatterns.some(function(pattern) { return pattern.test(text); });
+        }
+
+        ["log", "warn", "error"].forEach(function(level) {
+          console[level] = function() {
+            if (shouldSuppress(arguments, level)) {
+              return;
+            }
+            return originalConsole[level].apply(console, arguments);
+          };
+        });
+      })();
       function normalizeWebPreviewLocale(value) {
         var lang = String(value || navigator.language || "zh-CN")
           .toLowerCase()
@@ -226,7 +297,7 @@
         updateBannerVisibility();
       }
 
-      var webPreviewBuildCacheVersion = "2026.05.20.7";
+      var webPreviewBuildCacheVersion = "2026.05.21.06";
       var webPreviewCacheStartupTimeoutMs = 10000;
       var buildUrl = "Build";
       function withBuildCacheVersion(url) {
