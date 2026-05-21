@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.21.10";
+const WEBGL_PREVIEW_VERSION = "2026.05.21.11";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -1176,11 +1176,14 @@ function unwrapApiData(json) {
 }
 
 async function requestJsonThroughProxy(url) {
+  url.searchParams.set("_", String(Date.now()));
   const proxyUrl = new URL("/__xrugc_proxy__", window.location.origin);
   proxyUrl.searchParams.set("url", url.toString());
 
   const headers = {
     Accept: "application/json",
+    "Cache-Control": "no-cache",
+    Pragma: "no-cache",
   };
   if (state.token) {
     headers.Authorization = `Bearer ${state.token}`;
@@ -1188,6 +1191,7 @@ async function requestJsonThroughProxy(url) {
 
   const response = await fetch(proxyUrl.toString(), {
     method: "GET",
+    cache: "no-store",
     credentials: "same-origin",
     headers,
   });
@@ -1207,12 +1211,16 @@ async function requestSnapshot(sceneId) {
   const url = new URL("/api/snapshot", window.location.origin);
   url.searchParams.set("expand", SNAPSHOT_EXPAND);
   url.searchParams.set("verse_id", String(sceneId));
+  url.searchParams.set("_", String(Date.now()));
 
   const response = await fetch(url.toString(), {
     method: "GET",
+    cache: "no-store",
     credentials: "same-origin",
     headers: {
       Accept: "application/json",
+      "Cache-Control": "no-cache",
+      Pragma: "no-cache",
     },
   });
 
