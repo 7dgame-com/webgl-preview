@@ -732,13 +732,20 @@
             return url;
           }
 
-          return (
-            getProxyOrigin() +
-            "/__xrugc_proxy__?url=" +
-            normalizedUrl +
-            "&v=" +
-            encodeURIComponent(webPreviewBuildCacheVersion)
-          );
+          var proxyUrl = new URL(getProxiedAssetPath(normalizedUrl), getProxyOrigin());
+          proxyUrl.searchParams.set("url", normalizedUrl);
+          proxyUrl.searchParams.set("v", webPreviewBuildCacheVersion);
+          return proxyUrl.toString();
+        }
+
+        function getProxiedAssetPath(url) {
+          try {
+            var parsed = new URL(normalizeRemoteAssetUrl(url));
+            var extensionMatch = parsed.pathname.match(/\.([a-z0-9]+)$/i);
+            return "/__xrugc_proxy__/asset" + (extensionMatch ? extensionMatch[0].toLowerCase() : "");
+          } catch (error) {
+            return "/__xrugc_proxy__";
+          }
         }
 
         function normalizeVideoUrl(value) {

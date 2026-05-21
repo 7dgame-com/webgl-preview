@@ -897,10 +897,21 @@ function normalizeUnityPreviewVideoUrl(value) {
   }
 }
 
+function proxiedAssetPathFor(value) {
+  try {
+    const url = new URL(normalizeUnityPreviewRemoteAssetUrl(value));
+    const extension = url.pathname.match(/\.([a-z0-9]+)$/i)?.[0] || "";
+    return `/__xrugc_proxy__/asset${extension.toLowerCase()}`;
+  } catch {
+    return "/__xrugc_proxy__";
+  }
+}
+
 function toUnityPreviewProxyRequestUrl(value, proxyOrigin) {
-  return `${proxyOrigin}/__xrugc_proxy__?url=${normalizeUnityPreviewRemoteAssetUrl(
-    value
-  )}&v=${encodeURIComponent(WEBGL_PREVIEW_VERSION)}`;
+  const proxyUrl = new URL(proxiedAssetPathFor(value), proxyOrigin);
+  proxyUrl.searchParams.set("url", normalizeUnityPreviewRemoteAssetUrl(value));
+  proxyUrl.searchParams.set("v", WEBGL_PREVIEW_VERSION);
+  return proxyUrl.toString();
 }
 
 function toUnityPreviewAssetUrl(value, proxyOrigin) {
