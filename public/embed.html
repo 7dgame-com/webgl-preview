@@ -5,7 +5,7 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Unity Web Player | Web Preview</title>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
-    <link rel="stylesheet" href="TemplateData/style.css?v=2026.05.21.01">
+    <link rel="stylesheet" href="TemplateData/style.css?v=2026.05.21.02">
   </head>
   <body>
     <div id="unity-container" class="unity-desktop">
@@ -226,7 +226,7 @@
         updateBannerVisibility();
       }
 
-      var webPreviewBuildCacheVersion = "2026.05.21.01";
+      var webPreviewBuildCacheVersion = "2026.05.21.02";
       var webPreviewCacheStartupTimeoutMs = 10000;
       var buildUrl = "Build";
       function withBuildCacheVersion(url) {
@@ -732,10 +732,14 @@
             return url;
           }
 
-          var proxyUrl = new URL(getProxiedAssetPath(normalizedUrl), getProxyOrigin());
-          proxyUrl.searchParams.set("url", normalizedUrl);
-          proxyUrl.searchParams.set("v", webPreviewBuildCacheVersion);
-          return proxyUrl.toString();
+          return (
+            getProxyOrigin() +
+            getProxiedAssetPath(normalizedUrl) +
+            "?url=" +
+            normalizedUrl +
+            "&v=" +
+            encodeURIComponent(webPreviewBuildCacheVersion)
+          );
         }
 
         function getProxiedAssetPath(url) {

@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.21.01";
+const WEBGL_PREVIEW_VERSION = "2026.05.21.02";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -908,10 +908,8 @@ function proxiedAssetPathFor(value) {
 }
 
 function toUnityPreviewProxyRequestUrl(value, proxyOrigin) {
-  const proxyUrl = new URL(proxiedAssetPathFor(value), proxyOrigin);
-  proxyUrl.searchParams.set("url", normalizeUnityPreviewRemoteAssetUrl(value));
-  proxyUrl.searchParams.set("v", WEBGL_PREVIEW_VERSION);
-  return proxyUrl.toString();
+  const normalizedRemoteUrl = normalizeUnityPreviewRemoteAssetUrl(value);
+  return `${proxyOrigin}${proxiedAssetPathFor(normalizedRemoteUrl)}?url=${normalizedRemoteUrl}&v=${encodeURIComponent(WEBGL_PREVIEW_VERSION)}`;
 }
 
 function toUnityPreviewAssetUrl(value, proxyOrigin) {
