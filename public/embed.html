@@ -5,7 +5,7 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Unity Web Player | Web Preview</title>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
-    <link rel="stylesheet" href="TemplateData/style.css?v=2026.05.18.7">
+    <link rel="stylesheet" href="TemplateData/style.css?v=2026.05.20.7">
   </head>
   <body>
     <div id="unity-container" class="unity-desktop">
@@ -37,12 +37,36 @@
       var webPreviewEmbedded = window.parent && window.parent !== window;
       var webPreviewCacheActive = false;
       var webPreviewUnityReady = false;
+      var webPreviewRuntimeProgressTimer = 0;
+      var webPreviewRuntimeProgressStartedAt = 0;
+      var webPreviewRuntimeProgressActual = 0;
+      var webPreviewRuntimeProgressDisplayed = 0;
       var webPreviewParams = new URLSearchParams(window.location.search);
       var webPreviewSession = webPreviewParams.get("session") || "";
-      var webPreviewLocale = (webPreviewParams.get("lang") || navigator.language || "zh-CN")
-        .toLowerCase()
-        .replace("_", "-")
-        .indexOf("zh") === 0 ? "zh" : "en";
+      function normalizeWebPreviewLocale(value) {
+        var lang = String(value || navigator.language || "zh-CN")
+          .toLowerCase()
+          .replace("_", "-");
+        if (
+          lang === "zh-tw" ||
+          lang === "zh-hk" ||
+          lang === "zh-mo" ||
+          lang.indexOf("hant") !== -1
+        ) {
+          return "zh-TW";
+        }
+        if (lang.indexOf("zh") === 0) {
+          return "zh";
+        }
+        if (lang.indexOf("ja") === 0) {
+          return "ja";
+        }
+        if (lang.indexOf("th") === 0) {
+          return "th";
+        }
+        return "en";
+      }
+      var webPreviewLocale = normalizeWebPreviewLocale(webPreviewParams.get("lang"));
       var webPreviewText = {
         zh: {
           loadingPlugin: "正在加载 WebGL 插件",
@@ -53,6 +77,15 @@
           cachePrepare: "正在准备插件资源",
           cacheDetail: "{percent} {action} {completed}/{total}{path}。首次加载 Unity 大包会较慢，请勿退出或重复操作。"
         },
+        "zh-TW": {
+          loadingPlugin: "正在載入 WebGL 插件",
+          loadingRuntime: "正在準備 Unity 執行環境，請稍候。",
+          loadingRuntimePercent: "{percent}% 正在載入 Unity WebGL 執行環境，請稍候。",
+          cachePlugin: "正在快取 WebGL 插件",
+          cacheReuse: "已復用本機快取",
+          cachePrepare: "正在準備插件資源",
+          cacheDetail: "{percent} {action} {completed}/{total}{path}。首次載入 Unity 大包會較慢，請勿退出或重複操作。"
+        },
         en: {
           loadingPlugin: "Loading WebGL Plugin",
           loadingRuntime: "Preparing the Unity runtime. Please wait.",
@@ -61,6 +94,24 @@
           cacheReuse: "Using local cache",
           cachePrepare: "Preparing plugin assets",
           cacheDetail: "{percent} {action} {completed}/{total}{path}. The first Unity package load can be slow. Do not leave or repeat actions."
+        },
+        ja: {
+          loadingPlugin: "WebGL プラグインを読み込み中",
+          loadingRuntime: "Unity ランタイムを準備しています。しばらくお待ちください。",
+          loadingRuntimePercent: "{percent}% Unity WebGL ランタイムを読み込み中です。しばらくお待ちください。",
+          cachePlugin: "WebGL プラグインをキャッシュ中",
+          cacheReuse: "ローカルキャッシュを使用中",
+          cachePrepare: "プラグインリソースを準備中",
+          cacheDetail: "{percent} {action} {completed}/{total}{path}。初回の Unity パッケージ読み込みには時間がかかります。ページを離れたり操作を繰り返したりしないでください。"
+        },
+        th: {
+          loadingPlugin: "กำลังโหลดปลั๊กอิน WebGL",
+          loadingRuntime: "กำลังเตรียม Unity runtime กรุณารอสักครู่",
+          loadingRuntimePercent: "{percent}% กำลังโหลด Unity WebGL runtime กรุณารอสักครู่",
+          cachePlugin: "กำลังแคชปลั๊กอิน WebGL",
+          cacheReuse: "ใช้แคชในเครื่อง",
+          cachePrepare: "กำลังเตรียมทรัพยากรปลั๊กอิน",
+          cacheDetail: "{percent} {action} {completed}/{total}{path} การโหลดแพ็กเกจ Unity ครั้งแรกอาจใช้เวลานาน กรุณาอย่าออกจากหน้า หรือกดซ้ำ"
         }
       };
 
@@ -93,6 +144,61 @@
             detail: loadingDetail.textContent
           }, "*");
         }
+      }
+
+      function estimateWebPreviewRuntimeProgress() {
+        if (!webPreviewRuntimeProgressStartedAt) {
+          return 2;
+        }
+        var elapsedSeconds = Math.max(
+          0,
+          (performance.now() - webPreviewRuntimeProgressStartedAt) / 1000
+        );
+        return Math.min(
+          94,
+          Math.max(2, Math.round(2 + 92 * (1 - Math.exp(-elapsedSeconds / 18))))
+        );
+      }
+
+      function updateWebPreviewRuntimeProgress(actualPercent) {
+        if (typeof actualPercent === "number" && isFinite(actualPercent)) {
+          webPreviewRuntimeProgressActual = Math.max(
+            webPreviewRuntimeProgressActual,
+            Math.max(0, Math.min(100, Math.round(actualPercent)))
+          );
+        }
+
+        var percent = Math.max(
+          webPreviewRuntimeProgressDisplayed,
+          webPreviewRuntimeProgressActual,
+          estimateWebPreviewRuntimeProgress()
+        );
+        webPreviewRuntimeProgressDisplayed = percent;
+        document.querySelector("#unity-progress-bar-full").style.width = percent + "%";
+        setWebPreviewLoading(
+          true,
+          webPreviewT("loadingRuntimePercent", { percent: percent }),
+          webPreviewT("loadingPlugin")
+        );
+      }
+
+      function startWebPreviewRuntimeProgress() {
+        stopWebPreviewRuntimeProgress();
+        webPreviewRuntimeProgressStartedAt = performance.now();
+        webPreviewRuntimeProgressActual = 0;
+        webPreviewRuntimeProgressDisplayed = 0;
+        updateWebPreviewRuntimeProgress(2);
+        webPreviewRuntimeProgressTimer = window.setInterval(function() {
+          updateWebPreviewRuntimeProgress();
+        }, 500);
+      }
+
+      function stopWebPreviewRuntimeProgress() {
+        if (webPreviewRuntimeProgressTimer) {
+          window.clearInterval(webPreviewRuntimeProgressTimer);
+          webPreviewRuntimeProgressTimer = 0;
+        }
+        webPreviewRuntimeProgressStartedAt = 0;
       }
 
       // Shows a temporary message banner/ribbon for a few seconds, or
@@ -791,15 +897,11 @@
         var script = document.createElement("script");
         script.src = loaderUrl;
         script.onload = () => {
+          startWebPreviewRuntimeProgress();
           createUnityInstance(canvas, config, (progress) => {
-            var percent = Math.max(0, Math.min(100, Math.round(progress * 100)));
-            document.querySelector("#unity-progress-bar-full").style.width = percent + "%";
-            setWebPreviewLoading(
-              true,
-              webPreviewT("loadingRuntimePercent", { percent: percent }),
-              webPreviewT("loadingPlugin")
-            );
+            updateWebPreviewRuntimeProgress(progress * 100);
                 }).then((unityInstance) => {
+                  stopWebPreviewRuntimeProgress();
                   document.querySelector("#unity-loading-bar").style.display = "none";
                   webPreviewUnityReady = true;
                   if (!webPreviewCacheActive) {
@@ -812,6 +914,7 @@
                   createWebPreviewBridge(unityInstance);
 
                 }).catch((message) => {
+                  stopWebPreviewRuntimeProgress();
                   alert(message);
                 });
               };

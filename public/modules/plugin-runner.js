@@ -67,6 +67,59 @@ const I18N = {
     tokenCleared: "本地访问令牌已清空。",
     opened: "WebGL 场景运行器已打开。",
   },
+  "zh-TW": {
+    topbarLabel: "WebGL 控制列",
+    viewerLabel: "Unity WebGL 預覽",
+    fullscreenPreview: "全螢幕預覽",
+    sceneIdLabel: "場景號",
+    sceneIdPlaceholder: "請輸入場景號：例如1416",
+    run: "運行",
+    stop: "停止",
+    rerun: "重跑",
+    helpTitle: "操作說明",
+    helpClick: "單擊或長按滑鼠左鍵可進行點擊與拖拽物體操作",
+    helpRotate: "按住 Alt + 滑鼠左鍵旋轉視角",
+    helpZoomPan: "滾輪縮放視角，右鍵平移視角",
+    configured: "已配置",
+    notConfigured: "未配置",
+    enterSceneId: "請輸入場景號",
+    enterValidSceneId: "請輸入有效場景號",
+    loadingPlugin: "正在載入 WebGL 插件",
+    loadingPluginDetail: "0% 正在載入 Unity WebGL 執行環境，請稍候。",
+    loadingPluginGuard:
+      "0% 正在載入 Unity WebGL 執行環境，請勿切換場景或重複點擊。",
+    loadingPluginFallback: "正在載入 Unity WebGL 執行環境，請稍候。",
+    readingScene: "讀取場景中",
+    readingSceneDetail: "正在讀取場景 {sceneId}，請稍候。",
+    loadingScene: "正在載入場景",
+    preparingScene: "正在準備場景",
+    preparingSceneDetail: "正在整理場景資源、腳本和實體資料。",
+    sendingUnity: "發送到 Unity",
+    startingScene: "正在啟動場景",
+    startingSceneDetail: "場景資料已讀取完成，正在發送到 Unity。",
+    sceneResourceLoading: "場景資源載入中",
+    runFailed: "運行失敗",
+    running: "運行中",
+    cachePlugin: "正在快取 WebGL 插件",
+    cacheReuse: "已復用本機快取",
+    cachePrepare: "正在準備插件資源",
+    cacheDetail:
+      "{percent} {action} {completed}/{total}{path}。首次載入 Unity 大包會較慢，請勿退出或重複操作。",
+    localTokenMissing:
+      "API 401：本機獨立運行缺少登入狀態，請在「本機存取權杖」貼上平台 token 後重試。",
+    hostInit: "收到宿主 INIT，可使用登入狀態讀取場景。",
+    tokenUpdated: "登入 token 已更新。",
+    payloadSent: "場景 payload 已發送到 Unity。",
+    sceneReadStart: "開始讀取場景 {sceneId}。",
+    stopped: "已停止，場景已卸載並保留本機快取。",
+    iframeLoaded: "Unity iframe 已載入。",
+    runnerReady: "Unity runner 已就緒。",
+    runnerAccepted: "Unity runner 已接收場景。",
+    cacheFailed: "插件快取失敗，將繼續嘗試直接載入。",
+    tokenSaved: "本機存取權杖已儲存。",
+    tokenCleared: "本機存取權杖已清空。",
+    opened: "WebGL 場景運行器已開啟。",
+  },
   en: {
     topbarLabel: "WebGL controls",
     viewerLabel: "Unity WebGL preview",
@@ -120,6 +173,112 @@ const I18N = {
     tokenCleared: "Local access token cleared.",
     opened: "WebGL scene runner opened.",
   },
+  ja: {
+    topbarLabel: "WebGL コントロール",
+    viewerLabel: "Unity WebGL プレビュー",
+    fullscreenPreview: "全画面プレビュー",
+    sceneIdLabel: "シーン ID",
+    sceneIdPlaceholder: "シーン ID を入力：例 1416",
+    run: "実行",
+    stop: "停止",
+    rerun: "再実行",
+    helpTitle: "操作ヘルプ",
+    helpClick: "左クリックまたは長押しでクリックやオブジェクトのドラッグを行います",
+    helpRotate: "Alt + 左クリックで視点を回転します",
+    helpZoomPan: "ホイールでズーム、右クリックで視点を移動します",
+    configured: "設定済み",
+    notConfigured: "未設定",
+    enterSceneId: "シーン ID を入力してください",
+    enterValidSceneId: "有効なシーン ID を入力してください",
+    loadingPlugin: "WebGL プラグインを読み込み中",
+    loadingPluginDetail: "0% Unity WebGL ランタイムを読み込み中です。しばらくお待ちください。",
+    loadingPluginGuard:
+      "0% Unity WebGL ランタイムを読み込み中です。シーンを切り替えたり連続クリックしたりしないでください。",
+    loadingPluginFallback: "Unity WebGL ランタイムを読み込み中です。しばらくお待ちください。",
+    readingScene: "シーンを読み込み中",
+    readingSceneDetail: "シーン {sceneId} を読み込み中です。しばらくお待ちください。",
+    loadingScene: "シーンをロード中",
+    preparingScene: "シーンを準備中",
+    preparingSceneDetail: "シーンのリソース、スクリプト、エンティティを整理しています。",
+    sendingUnity: "Unity に送信中",
+    startingScene: "シーンを起動中",
+    startingSceneDetail: "シーンデータの読み込みが完了し、Unity に送信しています。",
+    sceneResourceLoading: "シーンリソースを読み込み中",
+    runFailed: "実行に失敗しました",
+    running: "実行中",
+    cachePlugin: "WebGL プラグインをキャッシュ中",
+    cacheReuse: "ローカルキャッシュを使用中",
+    cachePrepare: "プラグインリソースを準備中",
+    cacheDetail:
+      "{percent} {action} {completed}/{total}{path}。初回の Unity パッケージ読み込みには時間がかかります。ページを離れたり操作を繰り返したりしないでください。",
+    localTokenMissing:
+      "API 401: ローカル単体実行にログイン情報がありません。プラットフォーム token をローカルアクセストークンに貼り付けて再試行してください。",
+    hostInit: "ホスト INIT を受信しました。ログイン状態でシーンを読み込めます。",
+    tokenUpdated: "ログイン token を更新しました。",
+    payloadSent: "シーン payload を Unity に送信しました。",
+    sceneReadStart: "シーン {sceneId} の読み込みを開始しました。",
+    stopped: "停止しました。シーンをアンロードし、ローカルキャッシュを保持しました。",
+    iframeLoaded: "Unity iframe を読み込みました。",
+    runnerReady: "Unity runner の準備ができました。",
+    runnerAccepted: "Unity runner がシーンを受信しました。",
+    cacheFailed: "プラグインのキャッシュに失敗しました。直接読み込みを続行します。",
+    tokenSaved: "ローカルアクセストークンを保存しました。",
+    tokenCleared: "ローカルアクセストークンをクリアしました。",
+    opened: "WebGL シーンランナーを開きました。",
+  },
+  th: {
+    topbarLabel: "แถบควบคุม WebGL",
+    viewerLabel: "ตัวอย่าง Unity WebGL",
+    fullscreenPreview: "ดูแบบเต็มหน้าจอ",
+    sceneIdLabel: "รหัสฉาก",
+    sceneIdPlaceholder: "กรอกรหัสฉาก เช่น 1416",
+    run: "รัน",
+    stop: "หยุด",
+    rerun: "รันใหม่",
+    helpTitle: "วิธีใช้งาน",
+    helpClick: "คลิกหรือกดปุ่มซ้ายค้างเพื่อคลิกและลากวัตถุ",
+    helpRotate: "กด Alt + ปุ่มซ้ายเพื่อหมุนมุมมอง",
+    helpZoomPan: "ใช้ล้อเมาส์เพื่อซูม และคลิกขวาเพื่อเลื่อนมุมมอง",
+    configured: "ตั้งค่าแล้ว",
+    notConfigured: "ยังไม่ได้ตั้งค่า",
+    enterSceneId: "กรุณากรอกรหัสฉาก",
+    enterValidSceneId: "กรุณากรอกรหัสฉากที่ถูกต้อง",
+    loadingPlugin: "กำลังโหลดปลั๊กอิน WebGL",
+    loadingPluginDetail: "0% กำลังโหลด Unity WebGL runtime กรุณารอสักครู่",
+    loadingPluginGuard:
+      "0% กำลังโหลด Unity WebGL runtime กรุณาอย่าสลับฉากหรือคลิกซ้ำ",
+    loadingPluginFallback: "กำลังโหลด Unity WebGL runtime กรุณารอสักครู่",
+    readingScene: "กำลังอ่านฉาก",
+    readingSceneDetail: "กำลังอ่านฉาก {sceneId} กรุณารอสักครู่",
+    loadingScene: "กำลังโหลดฉาก",
+    preparingScene: "กำลังเตรียมฉาก",
+    preparingSceneDetail: "กำลังเตรียมทรัพยากร สคริปต์ และเอนทิตีของฉาก",
+    sendingUnity: "กำลังส่งไปยัง Unity",
+    startingScene: "กำลังเริ่มฉาก",
+    startingSceneDetail: "อ่านข้อมูลฉากเสร็จแล้ว กำลังส่งไปยัง Unity",
+    sceneResourceLoading: "กำลังโหลดทรัพยากรฉาก",
+    runFailed: "รันไม่สำเร็จ",
+    running: "กำลังรัน",
+    cachePlugin: "กำลังแคชปลั๊กอิน WebGL",
+    cacheReuse: "ใช้แคชในเครื่อง",
+    cachePrepare: "กำลังเตรียมทรัพยากรปลั๊กอิน",
+    cacheDetail:
+      "{percent} {action} {completed}/{total}{path} การโหลดแพ็กเกจ Unity ครั้งแรกอาจใช้เวลานาน กรุณาอย่าออกจากหน้า หรือกดซ้ำ",
+    localTokenMissing:
+      "API 401: โหมดโลคัลไม่มีสถานะเข้าสู่ระบบ กรุณาวาง platform token ในช่อง local access token แล้วลองใหม่",
+    hostInit: "ได้รับ INIT จากโฮสต์แล้ว สามารถใช้สถานะเข้าสู่ระบบเพื่ออ่านฉากได้",
+    tokenUpdated: "อัปเดต token เข้าสู่ระบบแล้ว",
+    payloadSent: "ส่ง payload ของฉากไปยัง Unity แล้ว",
+    sceneReadStart: "เริ่มอ่านฉาก {sceneId}",
+    stopped: "หยุดแล้ว ยกเลิกโหลดฉากและเก็บแคชในเครื่องไว้",
+    iframeLoaded: "โหลด Unity iframe แล้ว",
+    runnerReady: "Unity runner พร้อมแล้ว",
+    runnerAccepted: "Unity runner รับฉากแล้ว",
+    cacheFailed: "แคชปลั๊กอินไม่สำเร็จ จะลองโหลดโดยตรงต่อไป",
+    tokenSaved: "บันทึก local access token แล้ว",
+    tokenCleared: "ล้าง local access token แล้ว",
+    opened: "เปิด WebGL scene runner แล้ว",
+  },
 };
 
 const state = {
@@ -136,6 +295,8 @@ const state = {
   sceneResourceProgressTimer: 0,
   sceneResourceProgressStartedAt: 0,
   cacheActive: false,
+  loadingProgressPercent: 0,
+  loadingProgressMode: "plugin",
   frameSession: "",
   runSerial: 0,
   locale: "zh",
@@ -174,7 +335,13 @@ function normalizeLocale(value) {
   const lang = (value || navigator.language || "zh-CN")
     .toLowerCase()
     .replace("_", "-");
-  return lang.startsWith("zh") ? "zh" : "en";
+  if (lang === "zh-tw" || lang === "zh-hk" || lang === "zh-mo" || lang.includes("hant")) {
+    return "zh-TW";
+  }
+  if (lang.startsWith("zh")) return "zh";
+  if (lang.startsWith("ja")) return "ja";
+  if (lang.startsWith("th")) return "th";
+  return "en";
 }
 
 function resolveLocale() {
@@ -182,14 +349,16 @@ function resolveLocale() {
 }
 
 function t(key, params = {}) {
-  const template = I18N[state.locale][key] || I18N.zh[key] || key;
+  const template =
+    (I18N[state.locale] && I18N[state.locale][key]) || I18N.zh[key] || key;
   return template.replace(/\{(\w+)\}/g, (_, name) =>
     Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : ""
   );
 }
 
 function applyI18n() {
-  document.documentElement.lang = state.locale === "zh" ? "zh-CN" : "en";
+  const langMap = { zh: "zh-CN", "zh-TW": "zh-TW", en: "en-US", ja: "ja-JP", th: "th-TH" };
+  document.documentElement.lang = langMap[state.locale] || "en-US";
   document.querySelectorAll("[data-i18n]").forEach((node) => {
     node.textContent = t(node.dataset.i18n);
   });
@@ -216,7 +385,11 @@ function refreshStatusForLocale() {
     setStatus(t("running"), "running");
     return;
   }
-  if (state.busy || state.cacheActive || !state.frameReady) {
+  if (
+    state.busy ||
+    state.cacheActive ||
+    (!state.frameReady && !isUnityFrameStopped())
+  ) {
     setStatus(t("loadingPlugin"), "busy");
     return;
   }
@@ -247,7 +420,7 @@ function updateLocale(nextLang) {
   state.locale = nextLocale;
   applyI18n();
   refreshStatusForLocale();
-  if (!elements.loadingShield.hidden) {
+  if (!elements.loadingShield.hidden && !isUnityFrameStopped()) {
     setLoadingShield(true, t("loadingPluginFallback"), t("loadingPlugin"));
   }
   return true;
@@ -273,12 +446,32 @@ function setStatus(text, tone) {
   elements.status.dataset.tone = tone || "";
 }
 
-function setLoadingProgress(percentText, { indeterminate = false } = {}) {
-  const match = String(percentText || "").match(/(\d{1,3})%/);
-  const percent = match ? Math.max(0, Math.min(100, Number(match[1]))) : 0;
+function parsePercent(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(0, Math.min(100, Math.round(value)));
+  }
+  const match = String(value || "").match(/(\d{1,3})%/);
+  return match ? Math.max(0, Math.min(100, Number(match[1]))) : null;
+}
+
+function setLoadingProgress(percentText, { indeterminate = false, reset = false } = {}) {
+  const parsed = parsePercent(percentText);
+  if (parsed === null && !indeterminate) {
+    return;
+  }
+  const percent = reset
+    ? parsed || 0
+    : Math.max(state.loadingProgressPercent, parsed || 0);
+  state.loadingProgressPercent = percent;
   elements.loadingProgress.dataset.mode = indeterminate ? "indeterminate" : "";
   elements.loadingProgressBar.style.width = `${percent}%`;
   elements.loadingProgressText.textContent = `${percent}%`;
+}
+
+function setLoadingProgressMode(mode) {
+  if (state.loadingProgressMode === mode) return;
+  state.loadingProgressMode = mode;
+  state.loadingProgressPercent = 0;
 }
 
 function stopSceneResourceProgress() {
@@ -311,8 +504,9 @@ function updateSceneResourceProgress() {
 
 function startSceneResourceProgress() {
   stopSceneResourceProgress();
+  setLoadingProgressMode("scene-resource");
   state.sceneResourceProgressStartedAt = performance.now();
-  setLoadingProgress("8%");
+  setLoadingProgress("8%", { reset: true });
   state.sceneResourceProgressTimer = window.setInterval(
     updateSceneResourceProgress,
     500
@@ -325,6 +519,7 @@ function clearLoadingProgress() {
   elements.loadingProgress.dataset.mode = "";
   elements.loadingProgressBar.style.width = "0%";
   elements.loadingProgressText.textContent = "0%";
+  state.loadingProgressPercent = 0;
 }
 
 function shouldShowLoadingProgress() {
@@ -1056,6 +1251,7 @@ function loadUnityFrame({ clearPayload = false, autoRun = false } = {}) {
   state.frameSession = frameSession;
   state.stopped = false;
   state.frameReady = false;
+  setLoadingProgressMode("plugin-load");
   if (clearPayload) {
     state.payload = null;
   }
