@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.21.06";
+const WEBGL_PREVIEW_VERSION = "2026.05.21.07";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const SNAPSHOT_EXPAND =
@@ -295,6 +295,7 @@ const state = {
   sceneResourceProgressTimer: 0,
   sceneResourceProgressStartedAt: 0,
   cacheActive: false,
+  loadingI18n: null,
   loadingProgressPercent: 0,
   loadingProgressMode: "plugin",
   frameSession: "",
@@ -357,8 +358,7 @@ function t(key, params = {}) {
 }
 
 function applyI18n() {
-  const langMap = { zh: "zh-CN", "zh-TW": "zh-TW", en: "en-US", ja: "ja-JP", th: "th-TH" };
-  document.documentElement.lang = langMap[state.locale] || "en-US";
+  document.documentElement.lang = currentLocaleCode();
   document.querySelectorAll("[data-i18n]").forEach((node) => {
     node.textContent = t(node.dataset.i18n);
   });
@@ -376,9 +376,18 @@ function applyI18n() {
   }
 }
 
+function currentLocaleCode() {
+  const langMap = { zh: "zh-CN", "zh-TW": "zh-TW", en: "en-US", ja: "ja-JP", th: "th-TH" };
+  return langMap[state.locale] || "en-US";
+}
+
 function refreshStatusForLocale() {
   if (state.sceneLoading) {
     setStatus(t("readingScene"), "busy");
+    return;
+  }
+  if (state.sceneResourceLoading) {
+    setStatus(t("sceneResourceLoading"), "busy");
     return;
   }
   if (state.running) {
@@ -414,16 +423,80 @@ function extractLocaleCandidate(value) {
   return "";
 }
 
+function postLocaleToUnityFrame() {
+  if (isUnityFrameStopped() || !elements.frame.contentWindow) return;
+  elements.frame.contentWindow.postMessage(
+    {
+      type: "webgl-preview-locale-change",
+      lang: currentLocaleCode(),
+      locale: currentLocaleCode(),
+    },
+    "*"
+  );
+}
+
 function updateLocale(nextLang) {
-  const nextLocale = normalizeLocale(nextLang || readQuery().get("lang"));
+  const localeCandidate = nextLang || readQuery().get("lang");
+  if (!localeCandidate) return false;
+  const nextLocale = normalizeLocale(localeCandidate);
   if (nextLocale === state.locale) return false;
   state.locale = nextLocale;
   applyI18n();
   refreshStatusForLocale();
-  if (!elements.loadingShield.hidden && !isUnityFrameStopped()) {
-    setLoadingShield(true, t("loadingPluginFallback"), t("loadingPlugin"));
-  }
+  refreshLoadingShieldForLocale();
+  postLocaleToUnityFrame();
   return true;
+}
+
+function translateLoadingI18n(i18n) {
+  if (!i18n || typeof i18n !== "object") return null;
+  const titleKey = i18n.titleKey || "";
+  const detailKey = i18n.detailKey || "";
+  const params = i18n.params && typeof i18n.params === "object" ? { ...i18n.params } : {};
+  if (params.actionKey) {
+    params.action = t(params.actionKey);
+  }
+  if (!titleKey && !detailKey) return null;
+  return {
+    title: titleKey ? t(titleKey, params) : "",
+    detail: detailKey ? t(detailKey, params) : "",
+  };
+}
+
+function refreshLoadingShieldForLocale() {
+  if (elements.loadingShield.hidden || !state.loadingI18n) return;
+  const translated = translateLoadingI18n(state.loadingI18n);
+  if (!translated) return;
+  setLoadingShield(true, translated.detail, translated.title, state.loadingI18n);
+}
+
+function setLocalizedLoadingShield(visible, titleKey, detailKey, params = {}) {
+  const i18n = { titleKey, detailKey, params };
+  const translated = translateLoadingI18n(i18n) || {};
+  setLoadingShield(visible, translated.detail, translated.title, i18n);
+}
+
+function normalizeLoadingI18n(i18n) {
+  if (!i18n || typeof i18n !== "object") return null;
+  return {
+    titleKey: i18n.titleKey || "",
+    detailKey: i18n.detailKey || "",
+    params: i18n.params && typeof i18n.params === "object" ? { ...i18n.params } : {},
+  };
+}
+
+function setRemoteLoadingShield(message) {
+  const i18n = normalizeLoadingI18n(message.i18n);
+  if (i18n) {
+    const translated = translateLoadingI18n(i18n) || {};
+    setLoadingShield(true, translated.detail, translated.title, i18n);
+    return;
+  }
+  setLoadingShield(
+    true,
+    message.detail || t("loadingPluginFallback"),
+    message.title || t("loadingPlugin")
+  );
 }
 
 function genId(prefix) {
@@ -554,8 +627,13 @@ function renderControls() {
   elements.reload.disabled = state.busy && !state.sceneResourceLoading;
 }
 
-function setLoadingShield(visible, detail, title) {
+function setLoadingShield(visible, detail, title, i18n) {
   elements.loadingShield.hidden = !visible;
+  if (visible) {
+    state.loadingI18n = normalizeLoadingI18n(i18n);
+  } else {
+    state.loadingI18n = null;
+  }
   if (title) elements.loadingTitle.textContent = title;
   if (detail) elements.loadingDetail.textContent = detail;
   if (visible) {
@@ -1200,11 +1278,7 @@ async function runScene() {
   state.sceneLoading = true;
   setControlsBusy(true);
   setStatus(t("readingScene"), "busy");
-  setLoadingShield(
-    true,
-    t("readingSceneDetail", { sceneId }),
-    t("loadingScene")
-  );
+  setLocalizedLoadingShield(true, "loadingScene", "readingSceneDetail", { sceneId });
   log(t("sceneReadStart", { sceneId }));
 
   try {
@@ -1217,7 +1291,7 @@ async function runScene() {
     if (!isCurrentRunAttempt(runSerial)) {
       return;
     }
-    setLoadingShield(true, t("preparingSceneDetail"), t("preparingScene"));
+    setLocalizedLoadingShield(true, "preparingScene", "preparingSceneDetail");
     const payload = buildPayload(sceneId, runtimeData, scriptRuntimeData);
     if (!isCurrentRunAttempt(runSerial)) {
       return;
@@ -1225,7 +1299,7 @@ async function runScene() {
     state.payload = payload;
     updateSummary(payload);
     setStatus(t("sendingUnity"), "busy");
-    setLoadingShield(true, t("startingSceneDetail"), t("startingScene"));
+    setLocalizedLoadingShield(true, "startingScene", "startingSceneDetail");
     sendPayloadToUnity(payload);
   } catch (error) {
     state.running = false;
@@ -1258,11 +1332,7 @@ function loadUnityFrame({ clearPayload = false, autoRun = false } = {}) {
   if (autoRun) {
     state.pendingRun = true;
   }
-  setLoadingShield(
-    true,
-    t("loadingPluginDetail"),
-    t("loadingPlugin")
-  );
+  setLocalizedLoadingShield(true, "loadingPlugin", "loadingPluginDetail");
   const frameUrl = new URL("./embed.html", window.location.href);
   frameUrl.searchParams.set("embed", "1");
   frameUrl.searchParams.set("plugin", "1");
@@ -1299,11 +1369,7 @@ function rerunScene() {
 }
 
 function setupFrame() {
-  setLoadingShield(
-    true,
-    t("loadingPluginGuard"),
-    t("loadingPlugin")
-  );
+  setLocalizedLoadingShield(true, "loadingPlugin", "loadingPluginGuard");
 
   elements.frame.addEventListener("load", () => {
     if (state.stopped || elements.frame.src === "about:blank") {
@@ -1353,11 +1419,7 @@ function setupFrame() {
     }
     if (message.type === "webgl-preview-loading") {
       if (message.visible) {
-        setLoadingShield(
-          true,
-          message.detail || t("loadingPluginFallback"),
-          message.title || t("loadingPlugin")
-        );
+        setRemoteLoadingShield(message);
       } else {
         hideLoadingShieldIfReady();
       }
@@ -1373,12 +1435,13 @@ function setupFrame() {
         const total = Number(message.total || 0);
         const path = message.path ? `：${message.path}` : "";
         const percent = formatPercent(completed, total);
-        const action = message.reused ? t("cacheReuse") : t("cachePrepare");
-        setLoadingShield(
-          true,
-          t("cacheDetail", { percent, action, completed, total, path }),
-          t("cachePlugin")
-        );
+        setLocalizedLoadingShield(true, "cachePlugin", "cacheDetail", {
+          percent,
+          actionKey: message.reused ? "cacheReuse" : "cachePrepare",
+          completed,
+          total,
+          path,
+        });
       }
 
       if (message.status === "complete" || message.status === "cancelled") {

@@ -5,7 +5,7 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Unity Web Player | Web Preview</title>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
-    <link rel="stylesheet" href="TemplateData/style.css?v=2026.05.21.06">
+    <link rel="stylesheet" href="TemplateData/style.css?v=2026.05.21.07">
   </head>
   <body>
     <div id="unity-container" class="unity-desktop">
@@ -43,6 +43,7 @@
       var webPreviewRuntimeProgressDisplayed = 0;
       var webPreviewParams = new URLSearchParams(window.location.search);
       var webPreviewSession = webPreviewParams.get("session") || "";
+      var webPreviewLoadingI18n = null;
       (function installWebPreviewConsoleFilter() {
         var verbose = /^(1|true|debug|verbose)$/i.test(
           String(webPreviewParams.get("debug") || webPreviewParams.get("verbose") || "")
@@ -195,10 +196,59 @@
         });
       }
 
+      function extractWebPreviewLocaleCandidate(value) {
+        if (!value || typeof value !== "object") {
+          return "";
+        }
+        var direct = value.lang || value.language || value.locale || value.currentLang || value.currentLanguage;
+        if (typeof direct === "string") {
+          return direct;
+        }
+        if (value.payload && typeof value.payload === "object") {
+          return extractWebPreviewLocaleCandidate(value.payload);
+        }
+        if (value.config && typeof value.config === "object") {
+          return extractWebPreviewLocaleCandidate(value.config);
+        }
+        return "";
+      }
+
+      function normalizeWebPreviewLoadingI18n(i18n) {
+        if (!i18n || typeof i18n !== "object") {
+          return null;
+        }
+        return {
+          titleKey: i18n.titleKey || "",
+          detailKey: i18n.detailKey || "",
+          params: i18n.params && typeof i18n.params === "object" ? Object.assign({}, i18n.params) : {}
+        };
+      }
+
+      function translateWebPreviewLoadingI18n(i18n) {
+        var next = normalizeWebPreviewLoadingI18n(i18n);
+        if (!next || (!next.titleKey && !next.detailKey)) {
+          return null;
+        }
+        if (next.params.actionKey) {
+          next.params.action = webPreviewT(next.params.actionKey);
+        }
+        return {
+          title: next.titleKey ? webPreviewT(next.titleKey, next.params) : "",
+          detail: next.detailKey ? webPreviewT(next.detailKey, next.params) : ""
+        };
+      }
+
       loadingTitle.textContent = webPreviewT("loadingPlugin");
       loadingDetail.textContent = webPreviewT("loadingRuntime");
 
-      function setWebPreviewLoading(visible, detail, title) {
+      function setWebPreviewLoading(visible, detail, title, i18n) {
+        var nextI18n = normalizeWebPreviewLoadingI18n(i18n);
+        var translated = nextI18n ? translateWebPreviewLoadingI18n(nextI18n) : null;
+        if (translated) {
+          title = title || translated.title;
+          detail = detail || translated.detail;
+        }
+        webPreviewLoadingI18n = visible ? nextI18n : null;
         if (title) {
           loadingTitle.textContent = title;
         }
@@ -212,10 +262,49 @@
             session: webPreviewSession,
             visible: !!visible,
             title: loadingTitle.textContent,
-            detail: loadingDetail.textContent
+            detail: loadingDetail.textContent,
+            i18n: webPreviewLoadingI18n
           }, "*");
         }
       }
+
+      function updateWebPreviewLocale(nextLang) {
+        var nextLocale = normalizeWebPreviewLocale(nextLang);
+        if (nextLocale === webPreviewLocale) {
+          return false;
+        }
+        webPreviewLocale = nextLocale;
+        if (webPreviewLoadingI18n) {
+          setWebPreviewLoading(true, "", "", webPreviewLoadingI18n);
+        } else {
+          loadingTitle.textContent = webPreviewT("loadingPlugin");
+          loadingDetail.textContent = webPreviewT("loadingRuntime");
+        }
+        return true;
+      }
+
+      window.addEventListener("message", function(event) {
+        if (window.parent && window.parent !== window && event.source !== window.parent) {
+          return;
+        }
+        var message = event.data || {};
+        if (!message || typeof message !== "object") {
+          return;
+        }
+        if (
+          message.type === "webgl-preview-locale-change" ||
+          message.type === "LANGUAGE_CHANGE" ||
+          message.type === "LOCALE_CHANGE" ||
+          message.type === "SET_LANGUAGE" ||
+          message.type === "SET_LOCALE" ||
+          message.type === "CHANGE_LANGUAGE" ||
+          message.type === "CHANGE_LOCALE" ||
+          message.type === "LANG_CHANGE" ||
+          message.type === "I18N_CHANGE"
+        ) {
+          updateWebPreviewLocale(extractWebPreviewLocaleCandidate(message));
+        }
+      });
 
       function estimateWebPreviewRuntimeProgress() {
         if (!webPreviewRuntimeProgressStartedAt) {
@@ -248,8 +337,13 @@
         document.querySelector("#unity-progress-bar-full").style.width = percent + "%";
         setWebPreviewLoading(
           true,
-          webPreviewT("loadingRuntimePercent", { percent: percent }),
-          webPreviewT("loadingPlugin")
+          "",
+          "",
+          {
+            titleKey: "loadingPlugin",
+            detailKey: "loadingRuntimePercent",
+            params: { percent: percent }
+          }
         );
       }
 
@@ -297,7 +391,7 @@
         updateBannerVisibility();
       }
 
-      var webPreviewBuildCacheVersion = "2026.05.21.06";
+      var webPreviewBuildCacheVersion = "2026.05.21.07";
       var webPreviewCacheStartupTimeoutMs = 10000;
       var buildUrl = "Build";
       function withBuildCacheVersion(url) {
@@ -390,17 +484,21 @@
               var completed = Number(message.completed || 0);
               var total = Number(message.total || 0);
               var path = message.path ? "：" + message.path : "";
-              var action = message.reused ? webPreviewT("cacheReuse") : webPreviewT("cachePrepare");
               setWebPreviewLoading(
                 true,
-                webPreviewT("cacheDetail", {
-                  percent: cachePercent(completed, total),
-                  action: action,
-                  completed: completed,
-                  total: total,
-                  path: path
-                }),
-                webPreviewT("cachePlugin")
+                "",
+                "",
+                {
+                  titleKey: "cachePlugin",
+                  detailKey: "cacheDetail",
+                  params: {
+                    percent: cachePercent(completed, total),
+                    actionKey: message.reused ? "cacheReuse" : "cachePrepare",
+                    completed: completed,
+                    total: total,
+                    path: path
+                  }
+                }
               );
             }
 
