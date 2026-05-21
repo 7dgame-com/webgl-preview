@@ -22,7 +22,9 @@ const proxyRequestHeaders = [
   'accept',
   'accept-language',
   'authorization',
+  'cache-control',
   'content-type',
+  'pragma',
   'range',
   'if-range',
   'user-agent',
@@ -75,7 +77,7 @@ function buildProxyHeaders(req) {
   return headers;
 }
 
-async function proxyRemoteAsset(req, res, proxyUrl) {
+async function proxyRemoteAsset(req, res, proxyUrl, options = {}) {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
@@ -115,10 +117,21 @@ async function proxyRemoteAsset(req, res, proxyUrl) {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Expose-Headers': 'Accept-Ranges, Content-Length, Content-Range, Content-Type',
       'Cross-Origin-Resource-Policy': 'cross-origin',
+      ...(options.noStore
+        ? {
+            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+            Expires: '0',
+            Pragma: 'no-cache',
+          }
+        : {}),
     };
 
     upstream.headers.forEach((value, key) => {
-      if (!skippedProxyResponseHeaders.has(key.toLowerCase())) {
+      const lowerKey = key.toLowerCase();
+      if (
+        !skippedProxyResponseHeaders.has(lowerKey) &&
+        !(options.noStore && ['cache-control', 'expires', 'pragma'].includes(lowerKey))
+      ) {
         headers[key] = value;
       }
     });
@@ -168,7 +181,7 @@ const server = http.createServer((req, res) => {
     url.searchParams.forEach((value, key) => {
       targetUrl.searchParams.append(key, value);
     });
-    proxyRemoteAsset(req, res, targetUrl.toString());
+    proxyRemoteAsset(req, res, targetUrl.toString(), { noStore: true });
     return;
   }
 
