@@ -5,7 +5,7 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Unity Web Player | Web Preview</title>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
-    <link rel="stylesheet" href="TemplateData/style.css?v=2026.05.21.03">
+    <link rel="stylesheet" href="TemplateData/style.css?v=2026.05.21.04">
   </head>
   <body>
     <div id="unity-container" class="unity-desktop">
@@ -323,7 +323,7 @@
         updateBannerVisibility();
       }
 
-      var webPreviewBuildCacheVersion = "2026.05.21.03";
+      var webPreviewBuildCacheVersion = "2026.05.21.04";
       var webPreviewCacheStartupTimeoutMs = 10000;
       var buildUrl = "Build";
       function withBuildCacheVersion(url) {
@@ -574,7 +574,7 @@
             if (
               parsed.protocol === "https:" &&
               (parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost") &&
-              parsed.pathname === "/__xrugc_proxy__"
+              parsed.pathname.startsWith("/__xrugc_proxy__")
             ) {
               var host = parsed.host || window.location.host || "127.0.0.1:8080";
               if (host === "localhost:8080") {
@@ -814,7 +814,7 @@
           var normalizedUrl = normalizeRemoteAssetUrl(url);
           try {
             var parsed = new URL(normalizedUrl);
-            if (parsed.pathname === "/__xrugc_proxy__") {
+            if (parsed.pathname.startsWith("/__xrugc_proxy__")) {
               return getProxyOrigin() + parsed.pathname + parsed.search;
             }
 
