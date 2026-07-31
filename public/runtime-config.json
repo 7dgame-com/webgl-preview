@@ -14,14 +14,15 @@
   "platformApiAlias": "./platform-api",
   "assetOrigins": [
     "https://data.7dgame.com",
-    "https://7dgame-public-1251022382.cos.ap-nanjing.myqcloud.com"
+    "https://7dgame-public-1251022382.cos.ap-nanjing.myqcloud.com",
+    "https://mrpp-1257979353.cos.ap-chengdu.myqcloud.com"
   ],
   "standaloneApiBase": "",
   "allowManualSceneId": false,
   "allowDevelopmentToken": false,
   "handshakeTimeoutMs": 10000,
   "requestTimeoutMs": 15000,
-  "unityLoaderTimeoutMs": 120000,
+  "unityLoaderTimeoutMs": 600000,
   "disposeTimeoutMs": 5000,
   "maxDevicePixelRatio": 2,
   "sceneCacheMaxEntries": 200,

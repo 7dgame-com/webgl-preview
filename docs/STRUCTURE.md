@@ -50,8 +50,10 @@ webgl-preview/
   `./embed.html` entries resolve from the plugin registration root.
 - `/runtime-config.json` is no-store. `/build-manifest.json`, HTML, loader and
   Service Worker revalidate.
-- `/__xrugc_proxy__` and `/api/snapshot` are removed and return 404. Platform
-  credentials are never forwarded to scene asset hosts.
+- `/api/snapshot` is removed and returns 404. Nginx returns 404 for
+  `/__xrugc_proxy__`; the Service Worker accepts that legacy Unity URL only
+  through the same allowlisted scene-resource handler. Platform credentials are
+  never forwarded to scene asset hosts.
 - Unknown browser routes fall back to `index.html`; missing static-looking
   paths return 404.
 

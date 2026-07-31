@@ -102,9 +102,10 @@ test('Range and oversized scene resources bypass in-memory cache slicing', () =>
 test('only allowlisted cross-origin scene resources are intercepted', () => {
   assert.match(
     source,
-    /if \(url\.origin !== self\.location\.origin\) \{\s*const targetUrl = normalizeSceneResourceTargetUrl\(event\.request\.url\);\s*if \(targetUrl\) \{\s*event\.respondWith\(handleSceneResourceRequest\(event, targetUrl\)\);\s*\}\s*return;/
+    /if \(url\.origin !== self\.location\.origin\) \{\s*const targetUrl = normalizeSceneResourceTargetUrl\(event\.request\.url\);\s*if \(targetUrl && isAllowedSceneResourceRequestContext\(event\.request\)\) \{\s*event\.respondWith\(handleSceneResourceRequest\(event, targetUrl\)\);\s*\}\s*return;/
   );
   assert.match(source, /ALLOWED_SCENE_RESOURCE_HOSTS\.has\(url\.hostname\)/);
+  assert.match(source, /"mrpp-1257979353\.cos\.ap-chengdu\.myqcloud\.com"/);
   assert.match(source, /request\.mode === "no-cors"/);
   assert.match(source, /credentials: "omit"/);
   assert.match(source, /redirect: "error"/);
@@ -114,6 +115,52 @@ test('only allowlisted cross-origin scene resources are intercepted', () => {
   );
   assert.doesNotMatch(source, /headers\.get\(["']authorization["']\)/i);
   assert.doesNotMatch(source, /headers\.get\(["']cookie["']\)/i);
+});
+
+test('scene aliases reject navigation and active-content destinations', () => {
+  assert.match(
+    source,
+    /const ALLOWED_SCENE_RESOURCE_DESTINATIONS = new Set\(\[\s*"",\s*"image",\s*"audio",\s*"video",\s*\]\)/
+  );
+  assert.match(source, /request\.mode !== "navigate"/);
+  assert.match(
+    source,
+    /const handleSceneResourceEndpointRequest = \(event, endpointUrl\) => \{\s*if \(!isAllowedSceneResourceRequestContext\(event\.request\)\)/
+  );
+  assert.match(source, /status: 403/);
+  assert.match(source, /"x-content-type-options": "nosniff"/);
+});
+
+test('legacy Unity proxy URLs reuse the bounded scene-resource handler', () => {
+  assert.match(
+    source,
+    /const LEGACY_SCENE_RESOURCE_ENDPOINT = "__xrugc_proxy__"/
+  );
+  assert.match(
+    source,
+    /const legacySceneEndpointUrl = \(\) => scopeUrl\(LEGACY_SCENE_RESOURCE_ENDPOINT\)/
+  );
+
+  const fetchStart = source.indexOf('self.addEventListener("fetch"');
+  const legacyGate = source.indexOf(
+    'if (url.pathname === legacySceneEndpointUrl().pathname)',
+    fetchStart
+  );
+  const buildFallback = source.indexOf('event.respondWith(\n    getBuildManifest()', legacyGate);
+  const legacyBlock = source.slice(legacyGate, buildFallback);
+
+  assert.ok(fetchStart > 0);
+  assert.ok(legacyGate > fetchStart);
+  assert.ok(buildFallback > legacyGate);
+  assert.match(legacyBlock, /handleSceneResourceEndpointRequest\(event, legacySceneEndpointUrl\(\)\)/);
+  assert.doesNotMatch(legacyBlock, /fetch\(requestUrl\.searchParams\.get\("url"\)\)/);
+
+  const currentGate = source.indexOf(
+    'if (url.pathname === sceneEndpointUrl().pathname)',
+    fetchStart
+  );
+  const currentBlock = source.slice(currentGate, legacyGate);
+  assert.match(currentBlock, /handleSceneResourceEndpointRequest\(event, sceneEndpointUrl\(\)\)/);
 });
 
 test('the fixed Platform API alias is explicitly network-only', () => {

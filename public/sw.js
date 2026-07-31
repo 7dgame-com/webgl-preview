@@ -10,6 +10,10 @@ const BUILD_CACHE_PREFIX = "xrugc-webgl-preview-build-v3-";
 const SCENE_CACHE_PREFIX = "xrugc-webgl-preview-scene-v2-";
 const SCENE_CACHE_NAME = `${SCENE_CACHE_PREFIX}resources`;
 const SCENE_RESOURCE_ENDPOINT = "__xrugc_scene_resource__";
+// The checked-in Unity build still emits this historical same-origin URL.
+// It is only an alternate entry point into the exact scene-resource policy
+// below; nginx continues to expose no arbitrary upstream proxy.
+const LEGACY_SCENE_RESOURCE_ENDPOINT = "__xrugc_proxy__";
 const PLATFORM_API_ALIAS_SEGMENT = "platform-api";
 const BUILD_REVISION_QUERY = "__xrugc_build";
 const BUILD_CACHE_MAX_ENTRIES = 8;
@@ -25,6 +29,13 @@ const BUILD_INFLIGHT_MAX_FOREGROUND_CONSUMERS = 4;
 const ALLOWED_SCENE_RESOURCE_HOSTS = new Set([
   "data.7dgame.com",
   "7dgame-public-1251022382.cos.ap-nanjing.myqcloud.com",
+  "mrpp-1257979353.cos.ap-chengdu.myqcloud.com",
+]);
+const ALLOWED_SCENE_RESOURCE_DESTINATIONS = new Set([
+  "",
+  "image",
+  "audio",
+  "video",
 ]);
 const SCENE_RESOURCE_PATH_RE =
   /\.(?:png|jpe?g|gif|webp|bmp|svg|mp3|wav|ogg|m4a|mp4|webm|glb|gltf|fbx|obj|vox)(?:[?#]|$)/i;
@@ -390,18 +401,20 @@ const normalizeSceneResourceTargetUrl = (value) => {
 
 const sceneEndpointUrl = () => scopeUrl(SCENE_RESOURCE_ENDPOINT);
 
+const legacySceneEndpointUrl = () => scopeUrl(LEGACY_SCENE_RESOURCE_ENDPOINT);
+
 const sceneResourceCacheKey = (targetUrl) => {
   const url = sceneEndpointUrl();
   url.searchParams.set("url", targetUrl);
   return new Request(url.toString(), { credentials: "same-origin" });
 };
 
-const targetFromSceneRequest = (request) => {
+const targetFromSceneRequest = (request, endpointUrl = sceneEndpointUrl()) => {
   try {
     const requestUrl = new URL(request.url);
     if (
       requestUrl.origin !== self.location.origin ||
-      requestUrl.pathname !== sceneEndpointUrl().pathname
+      requestUrl.pathname !== endpointUrl.pathname
     ) {
       return "";
     }
@@ -409,6 +422,42 @@ const targetFromSceneRequest = (request) => {
   } catch {
     return "";
   }
+};
+
+const isAllowedSceneResourceRequestContext = (request) =>
+  request.mode !== "navigate" &&
+  ALLOWED_SCENE_RESOURCE_DESTINATIONS.has(request.destination || "");
+
+const blockedSceneResourceContextResponse = () =>
+  new Response("Scene resource request context is not allowed", {
+    status: 403,
+    headers: {
+      "cache-control": "no-store",
+      "content-type": "text/plain; charset=utf-8",
+      "x-content-type-options": "nosniff",
+    },
+  });
+
+const invalidSceneResourceUrlResponse = () =>
+  new Response("Invalid scene resource URL", {
+    status: 400,
+    headers: {
+      "cache-control": "no-store",
+      "content-type": "text/plain; charset=utf-8",
+      "x-content-type-options": "nosniff",
+    },
+  });
+
+// Both the current endpoint and Unity's historical alias pass through this
+// single request-context boundary before a target URL is considered.
+const handleSceneResourceEndpointRequest = (event, endpointUrl) => {
+  if (!isAllowedSceneResourceRequestContext(event.request)) {
+    return Promise.resolve(blockedSceneResourceContextResponse());
+  }
+  const targetUrl = targetFromSceneRequest(event.request, endpointUrl);
+  return targetUrl
+    ? handleSceneResourceRequest(event, targetUrl)
+    : Promise.resolve(invalidSceneResourceUrlResponse());
 };
 
 const cachedAt = (response) =>
@@ -721,7 +770,7 @@ self.addEventListener("fetch", (event) => {
 
   if (url.origin !== self.location.origin) {
     const targetUrl = normalizeSceneResourceTargetUrl(event.request.url);
-    if (targetUrl) {
+    if (targetUrl && isAllowedSceneResourceRequestContext(event.request)) {
       event.respondWith(handleSceneResourceRequest(event, targetUrl));
     }
     return;
@@ -740,19 +789,16 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (url.pathname === sceneEndpointUrl().pathname) {
-    const targetUrl = targetFromSceneRequest(event.request);
-    if (targetUrl) {
-      event.respondWith(handleSceneResourceRequest(event, targetUrl));
-    } else {
-      event.respondWith(
-        Promise.resolve(
-          new Response("Invalid scene resource URL", {
-            status: 400,
-            headers: { "content-type": "text/plain; charset=utf-8" },
-          })
-        )
-      );
-    }
+    event.respondWith(
+      handleSceneResourceEndpointRequest(event, sceneEndpointUrl())
+    );
+    return;
+  }
+
+  if (url.pathname === legacySceneEndpointUrl().pathname) {
+    event.respondWith(
+      handleSceneResourceEndpointRequest(event, legacySceneEndpointUrl())
+    );
     return;
   }
 

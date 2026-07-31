@@ -56,7 +56,10 @@ function loadLifecycleContract() {
   )(lifecycleState, lifecycleDocument, lifecycleElements);
 }
 
-function loadPlatformRequest(fetchImpl, { timeoutMs = 1000, backoffMs = 0 } = {}) {
+function loadPlatformRequest(
+  fetchImpl,
+  { timeoutMs = 1000, backoffMs = 0, refreshToken = async () => '' } = {}
+) {
   const retryConstants = sourceBetween(
     'const PLATFORM_GET_MAX_ATTEMPTS',
     'const PREVIEW_LIFECYCLE'
@@ -85,6 +88,7 @@ function loadPlatformRequest(fetchImpl, { timeoutMs = 1000, backoffMs = 0 } = {}
     'isAllowedSecureOrigin',
     'isAllowedPlatformRequestUrl',
     'getRequestTimeoutMs',
+    'requestTokenRefresh',
     'window',
     `${retryConstants}\n${previewError}\n${requestFunctions}\nreturn requestPlatformResponse;`
   )(
@@ -94,6 +98,7 @@ function loadPlatformRequest(fetchImpl, { timeoutMs = 1000, backoffMs = 0 } = {}
     () => true,
     () => true,
     () => timeoutMs,
+    refreshToken,
     testWindow
   );
 }
@@ -167,7 +172,7 @@ test('scene list uses the authenticated fixed Platform API contract', () => {
   assert.match(source, /url\.searchParams\.set\("per-page", String\(SCENE_PAGE_SIZE\)\)/);
   assert.match(source, /url\.searchParams\.set\("expand", "image"\)/);
   assert.match(source, /url\.searchParams\.set\("VerseSearch\[name\]", search\)/);
-  assert.match(source, /Authorization: `Bearer \$\{state\.token\}`/);
+  assert.match(source, /Authorization: `Bearer \$\{requestToken\}`/);
   assert.match(source, /credentials: "omit"/);
   assert.match(source, /X-Pagination-Current-Page/);
   assert.match(source, /X-Pagination-Page-Count/);
@@ -267,7 +272,7 @@ test('Platform GET retries one transient HTTP or network failure', async () => {
   }
 });
 
-test('Platform GET never retries auth, not-found, or non-gateway failures', async () => {
+test('Platform GET without a refreshed token does not retry auth, not-found, or non-gateway failures', async () => {
   for (const status of [401, 403, 404, 500]) {
     let calls = 0;
     const request = loadPlatformRequest(async () => {
@@ -366,6 +371,24 @@ test('asset URL policy preserves signed query bytes and rejects unsafe origins',
       (error) => error.code === 'WGP-ASSET-DENIED'
     );
   }
+
+  const chengduCosOrigin =
+    'https://mrpp-1257979353.cos.ap-chengdu.myqcloud.com';
+  const normalizeWithChengduCos = loadAssetUrlNormalizer({
+    allowedOrigins: ['https://data.7dgame.com', chengduCosOrigin],
+  });
+  assert.equal(
+    normalizeWithChengduCos(`${chengduCosOrigin}/model.glb`, chengduCosOrigin),
+    `${chengduCosOrigin}/model.glb`
+  );
+  assert.throws(
+    () =>
+      normalizeWithChengduCos(
+        'https://mrpp-1257979353.cos.ap-chengdu.myqcloud.com.evil.example/model.glb',
+        chengduCosOrigin
+      ),
+    (error) => error.code === 'WGP-ASSET-DENIED'
+  );
 });
 
 test('static production runtime config contains HTTPS-only host and API origins', () => {
@@ -396,7 +419,16 @@ test('scene selection does not start or preload Unity', () => {
 test('production token is memory-only and messages are session bound', () => {
   assert.doesNotMatch(source, /localStorage|sessionStorage/);
   assert.doesNotMatch(source, /get\(["'](?:token|access_token)["']\)/);
+  assert.match(source, /const TOKEN_REFRESH_TIMEOUT_MS = 15000/);
   assert.match(source, /payload: \{ handshakeSession: state\.handshakeSession \}/);
+  assert.match(source, /type: "TOKEN_REFRESH_REQUEST"/);
+  assert.match(source, /payload: \{ handshakeSession \}/);
+  assert.match(source, /state\.tokenRefreshWaiter\?\.handshakeSession === state\.handshakeSession/);
+  assert.match(source, /function readJwtPrincipal\(token\)/);
+  assert.match(source, /normalizeClaim\(payload\.uid\)/);
+  assert.match(source, /normalizeClaim\(payload\.sub\)/);
+  assert.match(source, /hasSameJwtPrincipal\(state\.token, nextToken\)/);
+  assert.match(source, /if \(nextToken === state\.token\) return/);
   assert.match(source, /payload\.handshakeSession === state\.handshakeSession/);
   assert.match(source, /event\.source === window\.parent/);
   assert.match(source, /event\.origin === state\.hostOrigin/);

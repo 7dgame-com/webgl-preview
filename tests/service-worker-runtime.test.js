@@ -438,6 +438,146 @@ for (const { label, scope } of scopeCases) {
     );
     assert.deepEqual(await storage.keys(), []);
   });
+
+  test(`${label}: legacy Unity asset alias uses the strict scene-resource boundary`, async () => {
+    const storage = new MemoryCacheStorage();
+    const upstreamRequests = [];
+    const runtime = loadServiceWorker({
+      scope,
+      caches: storage,
+      fetchImpl: async (request, options) => {
+        upstreamRequests.push({ request, options });
+        return new Response('legacy-scene-asset', {
+          headers: { 'content-type': 'model/gltf-binary' },
+        });
+      },
+    });
+    const target = label === 'root'
+      ? 'https://mrpp-1257979353.cos.ap-chengdu.myqcloud.com/scenes/demo.glb?sign=short-lived#ignored'
+      : 'https://7dgame-public-1251022382.cos.ap-nanjing.myqcloud.com/scenes/demo.png?sign=short-lived#ignored';
+    const alias = new URL('__xrugc_proxy__', scope);
+    alias.searchParams.set('url', target);
+    const request = new Request(alias, {
+      headers: {
+        Authorization: 'Bearer platform-token-must-not-leak',
+        Cookie: 'session=must-not-leak',
+        'If-None-Match': 'scene-etag',
+      },
+    });
+
+    const response = await runtime.dispatchFetch(request);
+
+    assert.equal(await response.text(), 'legacy-scene-asset');
+    assert.equal(upstreamRequests.length, 1);
+    assert.equal(upstreamRequests[0].request, target.replace(/#.*$/, ''));
+    assert.equal(upstreamRequests[0].options.method, 'GET');
+    assert.equal(upstreamRequests[0].options.mode, 'cors');
+    assert.equal(upstreamRequests[0].options.credentials, 'omit');
+    assert.equal(upstreamRequests[0].options.redirect, 'error');
+    assert.equal(
+      upstreamRequests[0].options.headers.get('if-none-match'),
+      'scene-etag'
+    );
+    assert.equal(
+      upstreamRequests[0].options.headers.get('authorization'),
+      null
+    );
+    assert.equal(upstreamRequests[0].options.headers.get('cookie'), null);
+  });
+
+  test(`${label}: legacy Unity asset alias rejects non-allowlisted targets before fetch`, async () => {
+    const storage = new MemoryCacheStorage();
+    let upstreamRequests = 0;
+    const runtime = loadServiceWorker({
+      scope,
+      caches: storage,
+      fetchImpl: async () => {
+        upstreamRequests += 1;
+        return new Response('must not be reached');
+      },
+    });
+    const hostileTargets = [
+      'http://data.7dgame.com/scenes/demo.glb',
+      'https://example.com/scenes/demo.glb',
+      'https://data.7dgame.com.evil.example/scenes/demo.glb',
+      'http://mrpp-1257979353.cos.ap-chengdu.myqcloud.com/scenes/demo.glb',
+      'https://mrpp-1257979353.cos.ap-chengdu.myqcloud.com.evil.example/scenes/demo.glb',
+      'https://user:password@data.7dgame.com/scenes/demo.glb',
+      'https://7dgame-public-1251022382.cos.ap-nanjing.myqcloud.com/scenes/demo.exe',
+      '',
+    ];
+
+    for (const target of hostileTargets) {
+      const alias = new URL('__xrugc_proxy__', scope);
+      alias.searchParams.set('url', target);
+      const response = await runtime.dispatchFetch(new Request(alias));
+      assert.equal(response.status, 400, target || 'empty URL');
+      assert.equal(await response.text(), 'Invalid scene resource URL');
+    }
+
+    assert.equal(upstreamRequests, 0);
+    assert.deepEqual(await storage.keys(), []);
+  });
+
+  test(`${label}: both scene aliases allow data/media fetches and block active-content contexts`, async () => {
+    const storage = new MemoryCacheStorage();
+    let upstreamRequests = 0;
+    const runtime = loadServiceWorker({
+      scope,
+      caches: storage,
+      fetchImpl: async () => {
+        upstreamRequests += 1;
+        return new Response('scene-resource');
+      },
+    });
+    const target = 'https://mrpp-1257979353.cos.ap-chengdu.myqcloud.com/scenes/station.glb';
+    const requestFor = (endpoint, destination, mode = 'cors') => {
+      const alias = new URL(endpoint, scope);
+      alias.searchParams.set('url', target);
+      const request = new Request(alias);
+      Object.defineProperty(request, 'destination', { value: destination });
+      Object.defineProperty(request, 'mode', { value: mode });
+      return request;
+    };
+
+    for (const endpoint of ['__xrugc_scene_resource__', '__xrugc_proxy__']) {
+      for (const destination of ['', 'image', 'audio', 'video']) {
+        const response = await runtime.dispatchFetch(
+          requestFor(endpoint, destination)
+        );
+        assert.equal(response.status, 200, `${endpoint} ${destination || 'empty'}`);
+      }
+
+      for (const destination of [
+        'script',
+        'style',
+        'worker',
+        'sharedworker',
+        'serviceworker',
+        'document',
+        'object',
+        'embed',
+      ]) {
+        const response = await runtime.dispatchFetch(
+          requestFor(endpoint, destination)
+        );
+        assert.equal(response.status, 403, `${endpoint} ${destination}`);
+        assert.equal(
+          await response.text(),
+          'Scene resource request context is not allowed'
+        );
+        assert.equal(response.headers.get('cache-control'), 'no-store');
+        assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+      }
+
+      const navigation = await runtime.dispatchFetch(
+        requestFor(endpoint, 'document', 'navigate')
+      );
+      assert.equal(navigation.status, 403, `${endpoint} navigate`);
+    }
+
+    assert.equal(upstreamRequests, 8);
+  });
 }
 
 const buildFixture = (revisionDigit) => {

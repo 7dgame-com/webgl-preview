@@ -61,4 +61,7 @@ instead of following an unvalidated hop. Non-allowlisted origins are not
 intercepted or rewritten.
 
 If CDN/COS CORS does not permit a required direct asset, fix that origin policy
-or regenerate the URL upstream. Do not restore `/__xrugc_proxy__` as a fallback.
+or regenerate the URL upstream. The Service Worker accepts the legacy
+`/__xrugc_proxy__?url=...` shape emitted by the current Unity build, but routes
+it through this same fixed-host, fixed-extension scene-resource policy. Do not
+restore an nginx or server-side arbitrary proxy as a fallback.

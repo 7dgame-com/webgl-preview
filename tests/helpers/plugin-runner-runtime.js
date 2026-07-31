@@ -354,7 +354,7 @@ async function createPluginRunnerHarness({
     allowDevelopmentToken: false,
     handshakeTimeoutMs: 10000,
     requestTimeoutMs: 15000,
-    unityLoaderTimeoutMs: 120000,
+    unityLoaderTimeoutMs: 600000,
     disposeTimeoutMs: 5000,
     maxDevicePixelRatio: 2,
     ...runtimeConfig,

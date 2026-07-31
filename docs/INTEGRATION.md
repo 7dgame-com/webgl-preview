@@ -127,6 +127,9 @@ pagination headers.
 
 - Scene assets keep their signed HTTPS URL semantics and must match an exact
   `assetOrigins` entry. Platform Token/Cookie headers are stripped.
+- The legacy China Space Station scene uses the exact Tencent COS origin
+  `https://mrpp-1257979353.cos.ap-chengdu.myqcloud.com`; keep this host explicit
+  rather than allowing wildcard COS domains.
 - Redirects are rejected by the Service Worker resource path instead of
   following an unvalidated target.
 - Manual scene id input is hidden in production. It requires

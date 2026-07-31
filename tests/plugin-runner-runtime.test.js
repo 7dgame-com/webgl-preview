@@ -43,6 +43,20 @@ function sceneCalls(harness, sceneId) {
   );
 }
 
+function jwtToken({ uid, sub = String(uid), sessionId }) {
+  const encode = (value) =>
+    Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
+  return `${encode({ alg: 'none', typ: 'JWT' })}.${encode({
+    uid,
+    sub,
+    session_id: sessionId,
+  })}.test-signature`;
+}
+
+function installJwtAtob(harness) {
+  harness.window.atob = (value) => Buffer.from(value, 'base64').toString('binary');
+}
+
 async function initialize(harness, token = 'token-a') {
   harness.dispatchHostMessage('INIT', { token });
   await harness.waitFor(
@@ -209,7 +223,190 @@ test('trusted handshake drives search, pagination, selection, and pre-run author
   );
   const frameUrl = new URL(harness.api.elements.frame.src);
   assert.equal(frameUrl.searchParams.get('maxDpr'), '1.25');
+  assert.equal(frameUrl.searchParams.get('loaderTimeoutMs'), '600000');
   assert.ok(frameUrl.searchParams.get('session'));
+});
+
+test('parallel scene detail 401s share one trusted host token refresh and retry once', async () => {
+  const expiredToken = jwtToken({ uid: 7, sessionId: 'session-before-refresh' });
+  const refreshedToken = jwtToken({ uid: 7, sessionId: 'session-after-refresh' });
+  const detailAttempts = new Map();
+  const harness = await createPluginRunnerHarness({
+    onFetch(call) {
+      const url = new URL(call.url);
+      if (url.pathname === '/api/v1/verses') {
+        return listResponse([{ id: 45, name: 'Refreshable scene' }]);
+      }
+      if (url.pathname === '/api/v1/verses/45') {
+        const language = url.searchParams.get('cl');
+        const attempt = (detailAttempts.get(language) || 0) + 1;
+        detailAttempts.set(language, attempt);
+        if (attempt === 1) {
+          assert.equal(call.headers.authorization, `Bearer ${expiredToken}`);
+          return jsonResponse(401, { message: 'expired' });
+        }
+        assert.equal(call.headers.authorization, `Bearer ${refreshedToken}`);
+        return jsonResponse(200, {
+          success: true,
+          data: {
+            id: 45,
+            name: 'Refreshable scene',
+            data: {},
+            resources: [],
+            metas: [],
+            code: '',
+          },
+        });
+      }
+      throw new Error(`Unexpected fetch: ${call.url}`);
+    },
+  });
+  installJwtAtob(harness);
+  await initialize(harness, expiredToken);
+  harness.api.elements.sceneOptions.children[0].click();
+  const identityGeneration = harness.api.state.identityGeneration;
+  harness.api.elements.run.click();
+
+  await harness.waitFor(
+    () =>
+      harness.parentMessages.filter(
+        ({ message }) => message.type === 'TOKEN_REFRESH_REQUEST'
+      ).length === 1,
+    'shared token refresh request'
+  );
+  const refreshRequest = harness.parentMessages.find(
+    ({ message }) => message.type === 'TOKEN_REFRESH_REQUEST'
+  );
+  assert.equal(refreshRequest.targetOrigin, harness.hostOrigin);
+  assert.equal(
+    refreshRequest.message.payload.handshakeSession,
+    harness.readyMessage().payload.handshakeSession
+  );
+  assert.match(refreshRequest.message.id, /^webgl-preview-token-refresh-/);
+  assert.equal(sceneCalls(harness, 45).length, 2, 'both detail GETs wait together');
+
+  harness.window.dispatch('message', {
+    origin: harness.hostOrigin,
+    source: harness.parentWindow,
+    data: {
+      type: 'TOKEN_UPDATE',
+      payload: { handshakeSession: 'wrong-session', token: 'stolen-token' },
+    },
+  });
+  await harness.flush();
+  assert.equal(harness.api.state.token, expiredToken);
+  assert.equal(sceneCalls(harness, 45).length, 2, 'wrong-session update is ignored');
+
+  harness.dispatchHostMessage('TOKEN_UPDATE', { token: expiredToken });
+  await harness.flush();
+  assert.equal(
+    harness.api.state.tokenRefreshWaiter?.handshakeSession,
+    harness.readyMessage().payload.handshakeSession,
+    'duplicate current token does not settle the pending refresh'
+  );
+  assert.equal(harness.api.state.identityGeneration, identityGeneration);
+  assert.equal(sceneCalls(harness, 45).length, 2);
+
+  harness.dispatchHostMessage('TOKEN_UPDATE', { token: refreshedToken });
+  await harness.waitFor(
+    () => harness.api.elements.frame.src.includes('/embed.html'),
+    'scene run after token refresh'
+  );
+  assert.equal(harness.api.state.token, refreshedToken);
+  assert.equal(harness.api.state.identityGeneration, identityGeneration);
+  assert.equal(harness.api.state.selectedSceneId, 45, 'refresh preserves selection');
+  assert.equal(listCalls(harness).length, 1, 'refresh does not reload identity data');
+  assert.equal(sceneCalls(harness, 45).length, 4, 'each original GET retries once');
+  assert.deepEqual([...detailAttempts.values()].sort(), [2, 2]);
+  assert.equal(harness.api.state.tokenRefreshWaiter, null);
+});
+
+test('principal change racing a token refresh resets identity instead of retrying the old scene', async () => {
+  const userAToken = jwtToken({ uid: 7, sessionId: 'user-a-session' });
+  const userBToken = jwtToken({ uid: 8, sessionId: 'user-b-session' });
+  let listAttempt = 0;
+  const harness = await createPluginRunnerHarness({
+    onFetch(call) {
+      const url = new URL(call.url);
+      if (url.pathname === '/api/v1/verses') {
+        listAttempt += 1;
+        if (listAttempt === 1) {
+          assert.equal(call.headers.authorization, `Bearer ${userAToken}`);
+          return listResponse([{ id: 45, name: 'User A scene' }]);
+        }
+        assert.equal(call.headers.authorization, `Bearer ${userBToken}`);
+        return listResponse([{ id: 88, name: 'User B scene' }]);
+      }
+      if (url.pathname === '/api/v1/verses/45') {
+        assert.equal(call.headers.authorization, `Bearer ${userAToken}`);
+        return jsonResponse(401, { message: 'expired' });
+      }
+      throw new Error(`Unexpected fetch: ${call.url}`);
+    },
+  });
+  installJwtAtob(harness);
+  await initialize(harness, userAToken);
+  harness.api.elements.sceneOptions.children[0].click();
+  const identityGeneration = harness.api.state.identityGeneration;
+  harness.api.elements.run.click();
+  await harness.waitFor(
+    () => Boolean(harness.api.state.tokenRefreshWaiter),
+    'pending token refresh'
+  );
+
+  harness.dispatchHostMessage('TOKEN_UPDATE', { token: userBToken });
+  await harness.waitFor(
+    () => harness.api.state.scenes[0]?.id === 88,
+    'new principal scene list'
+  );
+
+  assert.equal(harness.api.state.identityGeneration, identityGeneration + 1);
+  assert.equal(harness.api.state.token, userBToken);
+  assert.equal(harness.api.state.selectedSceneId, null);
+  assert.equal(harness.api.state.tokenRefreshWaiter, null);
+  assert.equal(sceneCalls(harness, 45).length, 2, 'old scene requests never retry');
+  assert.equal(listCalls(harness).length, 2, 'new principal reloads identity data');
+  assert.equal(harness.api.elements.frame.src, 'about:blank');
+});
+
+test('empty token racing a token refresh resets identity and settles as signed out', async () => {
+  const userToken = jwtToken({ uid: 7, sessionId: 'active-session' });
+  const harness = await createPluginRunnerHarness({
+    onFetch(call) {
+      const url = new URL(call.url);
+      if (url.pathname === '/api/v1/verses') {
+        assert.equal(call.headers.authorization, `Bearer ${userToken}`);
+        return listResponse([{ id: 45, name: 'Signed-in scene' }]);
+      }
+      if (url.pathname === '/api/v1/verses/45') {
+        return jsonResponse(401, { message: 'expired' });
+      }
+      throw new Error(`Unexpected fetch: ${call.url}`);
+    },
+  });
+  installJwtAtob(harness);
+  await initialize(harness, userToken);
+  harness.api.elements.sceneOptions.children[0].click();
+  const identityGeneration = harness.api.state.identityGeneration;
+  harness.api.elements.run.click();
+  await harness.waitFor(
+    () => Boolean(harness.api.state.tokenRefreshWaiter),
+    'pending token refresh'
+  );
+
+  harness.dispatchHostMessage('TOKEN_UPDATE', { token: '' });
+  await harness.waitFor(
+    () => harness.api.state.sceneListStatus === '401',
+    'signed-out scene list state'
+  );
+
+  assert.equal(harness.api.state.identityGeneration, identityGeneration + 1);
+  assert.equal(harness.api.state.token, '');
+  assert.equal(harness.api.state.selectedSceneId, null);
+  assert.equal(harness.api.state.tokenRefreshWaiter, null);
+  assert.equal(sceneCalls(harness, 45).length, 2, 'signed-out requests never retry');
+  assert.equal(listCalls(harness).length, 1, 'no authenticated list reload is attempted');
+  assert.equal(harness.api.elements.frame.src, 'about:blank');
 });
 
 test('401 and empty-list UI states are deterministic and production hides manual entry', async () => {
@@ -223,9 +420,23 @@ test('401 and empty-list UI states are deterministic and production hides manual
       throw new Error(`Unexpected fetch: ${call.url}`);
     },
   });
-  await initialize(unauthorized, 'expired-token');
+  unauthorized.dispatchHostMessage('INIT', { token: 'expired-token' });
+  await unauthorized.waitFor(
+    () =>
+      unauthorized.parentMessages.some(
+        ({ message }) => message.type === 'TOKEN_REFRESH_REQUEST'
+      ),
+    'token refresh request'
+  );
+  assert.equal(unauthorized.api.state.sceneListStatus, 'loading');
+  assert.equal(await unauthorized.scheduler.runDelay(15000), 1);
+  await unauthorized.waitFor(
+    () => unauthorized.api.state.sceneListStatus === '401',
+    'expired token state after refresh timeout'
+  );
   await unauthorized.scheduler.runDelay(0);
-  assert.equal(unauthorizedCalls, 1, '401 is not retried');
+  assert.equal(unauthorizedCalls, 1, '401 is not retried without a refreshed token');
+  assert.equal(unauthorized.api.state.token, 'expired-token');
   assert.equal(unauthorized.api.state.sceneListStatus, '401');
   assert.equal(unauthorized.api.state.lifecycle, 'terminal-error');
   assert.equal(unauthorized.api.elements.sceneListState.getAttribute('role'), 'alert');

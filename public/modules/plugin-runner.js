@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.08.01.1";
+const WEBGL_PREVIEW_VERSION = "2026.08.01.2";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const ASSET_PATH_RE =
@@ -10,6 +10,8 @@ const SCENE_SEARCH_DEBOUNCE_MS = 300;
 const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
 const DEFAULT_HANDSHAKE_TIMEOUT_MS = 15000;
 const DEFAULT_DISPOSE_TIMEOUT_MS = 4000;
+const DEFAULT_UNITY_LOADER_TIMEOUT_MS = 600000;
+const TOKEN_REFRESH_TIMEOUT_MS = 15000;
 const PLATFORM_GET_MAX_ATTEMPTS = 2;
 const PLATFORM_GET_RETRY_DELAY_MS = 250;
 const RETRYABLE_PLATFORM_STATUSES = new Set([502, 503, 504]);
@@ -504,6 +506,7 @@ const state = {
   handshakeTimer: 0,
   hostOrigin: "",
   hostSource: null,
+  tokenRefreshWaiter: null,
   identityGeneration: 0,
   payload: null,
   frameReady: false,
@@ -1105,6 +1108,13 @@ function getDisposeTimeoutMs() {
     : DEFAULT_DISPOSE_TIMEOUT_MS;
 }
 
+function getUnityLoaderTimeoutMs() {
+  const configured = Number(state.runtimeConfig.unityLoaderTimeoutMs);
+  return Number.isFinite(configured) && configured >= 1000
+    ? Math.min(configured, 900000)
+    : DEFAULT_UNITY_LOADER_TIMEOUT_MS;
+}
+
 function getMaxDevicePixelRatio() {
   const configured = Number(state.runtimeConfig.maxDevicePixelRatio);
   return Number.isFinite(configured) && configured > 0
@@ -1283,6 +1293,42 @@ function setToken(token) {
   }
 }
 
+function readJwtPrincipal(token) {
+  const normalizedToken = typeof token === "string" ? token.trim() : "";
+  const payloadSegment = normalizedToken.split(".")[1] || "";
+  if (!payloadSegment || !/^[A-Za-z0-9_-]+$/.test(payloadSegment)) return null;
+
+  try {
+    const base64 = payloadSegment
+      .replace(/-/g, "+")
+      .replace(/_/g, "/")
+      .padEnd(Math.ceil(payloadSegment.length / 4) * 4, "=");
+    const payload = JSON.parse(window.atob(base64));
+    if (!isRecord(payload)) return null;
+    const normalizeClaim = (value) =>
+      typeof value === "string" || typeof value === "number"
+        ? String(value).trim()
+        : "";
+    const uid = normalizeClaim(payload.uid);
+    const sub = normalizeClaim(payload.sub);
+    if (!uid && !sub) return null;
+    return { uid, sub };
+  } catch {
+    return null;
+  }
+}
+
+function hasSameJwtPrincipal(currentToken, nextToken) {
+  const currentPrincipal = readJwtPrincipal(currentToken);
+  const nextPrincipal = readJwtPrincipal(nextToken);
+  return (
+    Boolean(currentPrincipal) &&
+    Boolean(nextPrincipal) &&
+    currentPrincipal.uid === nextPrincipal.uid &&
+    currentPrincipal.sub === nextPrincipal.sub
+  );
+}
+
 function hasHandshakeSession(payload) {
   return (
     isRecord(payload) &&
@@ -1311,6 +1357,86 @@ function postPluginReady() {
     id: genId(`${PLUGIN_ID}-ready`),
     payload: { handshakeSession: state.handshakeSession },
   });
+}
+
+function settleTokenRefreshWaiter(token = "", updateToken = false) {
+  const waiter = state.tokenRefreshWaiter;
+  if (!waiter) return false;
+  state.tokenRefreshWaiter = null;
+  window.clearTimeout(waiter.timer);
+  if (updateToken) setToken(token);
+  waiter.resolve(updateToken ? state.token : "");
+  return true;
+}
+
+function waitForSharedTokenRefresh(signal) {
+  const waiter = state.tokenRefreshWaiter;
+  if (!waiter) return Promise.resolve("");
+  if (signal?.aborted) return Promise.reject(abortReason(signal));
+
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      signal?.removeEventListener("abort", onAbort);
+      reject(abortReason(signal));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+    waiter.promise.then(
+      (token) => {
+        signal?.removeEventListener("abort", onAbort);
+        resolve(token);
+      },
+      (error) => {
+        signal?.removeEventListener("abort", onAbort);
+        reject(error);
+      }
+    );
+  });
+}
+
+function requestTokenRefresh(signal) {
+  if (
+    !state.handshakeComplete ||
+    !state.handshakeSession ||
+    !state.hostSource ||
+    !state.hostOrigin
+  ) {
+    return Promise.resolve("");
+  }
+
+  if (
+    state.tokenRefreshWaiter &&
+    state.tokenRefreshWaiter.handshakeSession !== state.handshakeSession
+  ) {
+    settleTokenRefreshWaiter("");
+  }
+
+  if (!state.tokenRefreshWaiter) {
+    let resolveWaiter;
+    const promise = new Promise((resolve) => {
+      resolveWaiter = resolve;
+    });
+    const handshakeSession = state.handshakeSession;
+    const waiter = {
+      handshakeSession,
+      promise,
+      resolve: resolveWaiter,
+      timer: 0,
+    };
+    state.tokenRefreshWaiter = waiter;
+    waiter.timer = window.setTimeout(() => {
+      if (state.tokenRefreshWaiter !== waiter) return;
+      settleTokenRefreshWaiter("");
+    }, TOKEN_REFRESH_TIMEOUT_MS);
+
+    const posted = postToHost({
+      type: "TOKEN_REFRESH_REQUEST",
+      id: genId(`${PLUGIN_ID}-token-refresh`),
+      payload: { handshakeSession },
+    });
+    if (!posted) settleTokenRefreshWaiter("");
+  }
+
+  return waitForSharedTokenRefresh(signal);
 }
 
 function isTrustedHostEvent(event) {
@@ -1373,8 +1499,28 @@ function handleHostMessage(event) {
   if (!state.handshakeComplete || event.source !== state.hostSource) return;
 
   if (message.type === "TOKEN_UPDATE") {
+    const nextToken = typeof payload.token === "string" ? payload.token.trim() : "";
+    const refreshIsPending =
+      state.tokenRefreshWaiter?.handshakeSession === state.handshakeSession;
+    if (refreshIsPending) {
+      if (!nextToken) {
+        log(t("tokenUpdated"));
+        resetForIdentityChange("");
+        return;
+      }
+      if (nextToken === state.token) return;
+      if (hasSameJwtPrincipal(state.token, nextToken)) {
+        log(t("tokenUpdated"));
+        settleTokenRefreshWaiter(nextToken, true);
+        return;
+      }
+      log(t("tokenUpdated"));
+      resetForIdentityChange(nextToken);
+      return;
+    }
+    if (nextToken === state.token) return;
     log(t("tokenUpdated"));
-    resetForIdentityChange(payload.token);
+    resetForIdentityChange(nextToken);
     return;
   }
 
@@ -1668,8 +1814,17 @@ async function requestPlatformResponse(url, { signal, code = "WGP-API" } = {}) {
     });
   }
 
-  for (let attempt = 0; attempt < PLATFORM_GET_MAX_ATTEMPTS; attempt += 1) {
+  let retryableFailures = 0;
+  let retriedAfterTokenRefresh = false;
+  while (true) {
     if (signal?.aborted) throw abortReason(signal);
+    const requestToken = state.token;
+    if (!requestToken) {
+      throw new PreviewError(code, "Authentication required", {
+        status: 401,
+        retryable: false,
+      });
+    }
     const request = createRequestContext(signal);
     let failure = null;
     try {
@@ -1682,7 +1837,7 @@ async function requestPlatformResponse(url, { signal, code = "WGP-API" } = {}) {
         signal: request.signal,
         headers: {
           Accept: "application/json",
-          Authorization: `Bearer ${state.token}`,
+          Authorization: `Bearer ${requestToken}`,
         },
       });
       if (!response.ok) {
@@ -1714,13 +1869,22 @@ async function requestPlatformResponse(url, { signal, code = "WGP-API" } = {}) {
       request.cleanup();
     }
 
-    const canRetry =
-      attempt + 1 < PLATFORM_GET_MAX_ATTEMPTS && shouldRetryPlatformGet(failure);
-    if (!canRetry) throw failure;
-    await waitForRetryBackoff(PLATFORM_GET_RETRY_DELAY_MS * (attempt + 1), signal);
-  }
+    if (Number(failure?.status || 0) === 401 && !retriedAfterTokenRefresh) {
+      retriedAfterTokenRefresh = true;
+      const refreshedToken = await requestTokenRefresh(signal);
+      if (refreshedToken) continue;
+    }
 
-  throw new PreviewError(`${code}-NETWORK`, "Platform API request failed");
+    retryableFailures += 1;
+    const canRetry =
+      retryableFailures < PLATFORM_GET_MAX_ATTEMPTS &&
+      shouldRetryPlatformGet(failure);
+    if (!canRetry) throw failure;
+    await waitForRetryBackoff(
+      PLATFORM_GET_RETRY_DELAY_MS * retryableFailures,
+      signal
+    );
+  }
 }
 
 async function requestMyScenes({ page, search, signal }) {
@@ -1849,6 +2013,7 @@ async function loadMyScenes({ resetPage = false } = {}) {
 }
 
 function clearIdentityState() {
+  settleTokenRefreshWaiter("");
   abortSceneList();
   state.runAbortController?.abort();
   state.runAbortController = null;
@@ -2387,6 +2552,7 @@ function loadUnityFrame({ clearPayload = false, autoRun = false } = {}) {
   frameUrl.searchParams.set("v", WEBGL_PREVIEW_VERSION);
   frameUrl.searchParams.set("session", frameSession);
   frameUrl.searchParams.set("lang", readQuery().get("lang") || document.documentElement.lang);
+  frameUrl.searchParams.set("loaderTimeoutMs", String(getUnityLoaderTimeoutMs()));
   frameUrl.searchParams.set("maxDpr", String(getMaxDevicePixelRatio()));
   elements.frame.src = frameUrl.toString();
 }

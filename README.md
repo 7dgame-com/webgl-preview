@@ -60,8 +60,10 @@ handshake and lists the authenticated user's scenes through the same-origin,
 network-only `GET ./platform-api/v1/verses` alias. The container forwards only
 the fixed Verse list/detail routes to the validated `HOST_API_BASE`, while
 signed scene assets stay on an explicit HTTPS allowlist. The removed
-`/__xrugc_proxy__` and `/api/snapshot` compatibility endpoints always return
-404.
+`/api/snapshot` endpoint always returns 404. Nginx also returns 404 for
+`/__xrugc_proxy__`; a controlling Service Worker recognizes that legacy Unity
+URL only as an alternate entry into the same HTTPS host/file allowlist used by
+`/__xrugc_scene_resource__`, with credentials omitted and redirects rejected.
 
 `public/build-manifest.json` binds loader/data/framework/wasm into one build
 identity. Publishing CI uses the checked-in immutable base digest by default;

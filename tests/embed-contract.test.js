@@ -23,12 +23,23 @@ test('runner does not rewrite scene assets through a generic proxy', () => {
   assert.match(embed, /return clonePayload\(payload\)/);
 });
 
-test('cache warming cannot block Unity startup', () => {
-  assert.match(embed, /warmWebPreviewCache\(\);/);
-  assert.match(embed, /loadWebPreviewBuildManifest\(\)\.then/);
+test('Unity waits for the registered worker controller but not cache warming', () => {
+  const warmStart = embed.indexOf('function warmWebPreviewCache(controller)');
+  const warmEnd = embed.indexOf('var webPreviewSceneVisibleNotified', warmStart);
+  const warmSource = embed.slice(warmStart, warmEnd);
+
+  assert.ok(warmStart > 0);
+  assert.ok(warmEnd > warmStart);
+  assert.match(embed, /worker\.state === "activated"[\s\S]+navigator\.serviceWorker\.controller === worker/);
+  assert.match(embed, /prepareWebPreviewServiceWorker\(\)\.then\(function\(controller\)/);
+  assert.match(embed, /warmWebPreviewCache\(controller\);\s*return loadWebPreviewBuildManifest\(\);/);
   assert.match(embed, /applyWebPreviewBuildFiles\(byRole\)/);
   assert.match(embed, /startUnityWebPreview\(\);/);
-  assert.doesNotMatch(embed, /webPreviewCacheReady\.then/);
+  assert.doesNotMatch(embed, /return warmWebPreviewCache\(controller\)/);
+  assert.doesNotMatch(embed, /Cache warm timed out\. Starting Unity directly/);
+  assert.match(embed, /Cache warm continues in the background/);
+  assert.doesNotMatch(warmSource, /cancel-webgl-preview-cache/);
+  assert.match(embed, /webPreviewUnityReady = true;[\s\S]+setWebPreviewLoading\(false\)/);
 });
 
 test('runner loads every Unity artifact from one validated build manifest', () => {
@@ -48,6 +59,11 @@ test('runner exposes a session-bound Quit lifecycle and deterministic errors', (
   assert.match(embed, /WGP-UNITY-LOADER/);
   assert.match(embed, /WGP-UNITY-START/);
   assert.doesNotMatch(embed, /alert\s*\(/);
+});
+
+test('runner allows the production Unity package enough time to start on a cold cache', () => {
+  assert.match(embed, /timeoutMs = 600000/);
+  assert.match(embed, /Math\.min\(timeoutMs, 900000\)/);
 });
 
 test('runner caps device pixel ratio and keeps zoom available', () => {

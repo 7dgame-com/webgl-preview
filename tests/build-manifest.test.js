@@ -177,7 +177,7 @@ test('publishing base-image policy accepts only immutable digest references', ()
 test('release metadata approves only an explicit Shell and Unity build pair', (t) => {
   const sourceRoot = path.resolve(__dirname, '..', 'public');
   assert.deepEqual(verifyArtifactCompatibility({ rootDir: sourceRoot }), {
-    previewShellVersion: '2026.08.01.1',
+    previewShellVersion: '2026.08.01.2',
     unityBuildId:
       'sha256:7bee87bbf1c044802841b46489638cb5069eac5b51fb0637714a3b826b092f33',
   });
@@ -188,7 +188,7 @@ test('release metadata approves only an explicit Shell and Unity build pair', (t
         'hkccr.ccs.tencentyun.com/plugins/webgl-preview@sha256:1e03190d0b44ca204869461862859198a801edb3b4c1bf00e8ee5e8da1d9bfe5',
     }),
     {
-      previewShellVersion: '2026.08.01.1',
+      previewShellVersion: '2026.08.01.2',
       unityBuildId:
         'sha256:7bee87bbf1c044802841b46489638cb5069eac5b51fb0637714a3b826b092f33',
     }
