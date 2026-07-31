@@ -89,6 +89,16 @@ class FakeElement extends FakeEventTarget {
     this.append(...children);
   }
 
+  replaceWith(replacement) {
+    const parent = this.parentNode;
+    if (!parent) return;
+    const index = parent.children.indexOf(this);
+    if (index < 0) return;
+    this.parentNode = null;
+    replacement.parentNode = parent;
+    parent.children.splice(index, 1, replacement);
+  }
+
   descendants() {
     return this.children.flatMap((child) => [child, ...child.descendants()]);
   }

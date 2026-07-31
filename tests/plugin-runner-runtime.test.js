@@ -103,6 +103,49 @@ test('same-origin fixed API alias wins when INIT omits apiBase', async () => {
   assert.equal(Object.hasOwn(request.headers, 'pragma'), false);
 });
 
+test('scene thumbnails use anonymous CORS and fall back without breaking an option', async () => {
+  const thumbnailUrl = 'https://data.7dgame.com/scenes/thumbnail.png';
+  const harness = await createPluginRunnerHarness({
+    onFetch(call) {
+      if (new URL(call.url).pathname === '/api/v1/verses') {
+        return listResponse([
+          { id: 1, name: 'With thumbnail', image: { url: thumbnailUrl } },
+          { id: 2, name: 'Without thumbnail' },
+        ]);
+      }
+      throw new Error(`Unexpected fetch: ${call.url}`);
+    },
+  });
+
+  await initialize(harness);
+
+  const [withThumbnail, withoutThumbnail] =
+    harness.api.elements.sceneOptions.children;
+  const image = withThumbnail.children[0];
+  assert.equal(image.name, 'img');
+  assert.equal(image.crossOrigin, 'anonymous');
+  assert.equal(image.referrerPolicy, 'no-referrer');
+  assert.equal(image.src, thumbnailUrl);
+
+  const emptyPlaceholder = withoutThumbnail.children[0];
+  assert.equal(emptyPlaceholder.name, 'span');
+  assert.equal(emptyPlaceholder.className, 'scene-thumbnail-placeholder');
+  assert.equal(emptyPlaceholder.getAttribute('aria-hidden'), 'true');
+  assert.equal(emptyPlaceholder.textContent, '◇');
+
+  image.dispatch('error');
+  const failedPlaceholder = withThumbnail.children[0];
+  assert.equal(image.parentNode, null);
+  assert.equal(failedPlaceholder.name, 'span');
+  assert.equal(failedPlaceholder.className, 'scene-thumbnail-placeholder');
+  assert.equal(failedPlaceholder.getAttribute('aria-hidden'), 'true');
+  assert.equal(failedPlaceholder.textContent, '◇');
+  assert.deepEqual(
+    withThumbnail.children.map((child) => child.className),
+    ['scene-thumbnail-placeholder', 'scene-option-copy', 'scene-option-check']
+  );
+});
+
 test('trusted handshake drives search, pagination, selection, and pre-run authorization', async () => {
   const lua = deferred();
   const javascript = deferred();

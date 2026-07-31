@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.08.01.2";
+const WEBGL_PREVIEW_VERSION = "2026.08.01.3";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const ASSET_PATH_RE =
@@ -1626,6 +1626,14 @@ function sceneListMessage() {
   }
 }
 
+function createSceneThumbnailPlaceholder() {
+  const placeholder = document.createElement("span");
+  placeholder.className = "scene-thumbnail-placeholder";
+  placeholder.setAttribute("aria-hidden", "true");
+  placeholder.textContent = "◇";
+  return placeholder;
+}
+
 function renderScenePicker() {
   if (!elements.sceneSearch || !elements.sceneOptions) return;
   const message = sceneListMessage();
@@ -1653,17 +1661,19 @@ function renderScenePicker() {
     if (scene.thumbnail) {
       const image = document.createElement("img");
       image.className = "scene-thumbnail";
-      image.src = scene.thumbnail;
       image.alt = "";
       image.loading = "lazy";
       image.referrerPolicy = "no-referrer";
+      image.crossOrigin = "anonymous";
+      image.addEventListener(
+        "error",
+        () => image.replaceWith(createSceneThumbnailPlaceholder()),
+        { once: true }
+      );
+      image.src = scene.thumbnail;
       option.append(image);
     } else {
-      const placeholder = document.createElement("span");
-      placeholder.className = "scene-thumbnail-placeholder";
-      placeholder.setAttribute("aria-hidden", "true");
-      placeholder.textContent = "◇";
-      option.append(placeholder);
+      option.append(createSceneThumbnailPlaceholder());
     }
 
     const copy = document.createElement("span");

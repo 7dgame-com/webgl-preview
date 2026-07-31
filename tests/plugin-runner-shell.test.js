@@ -437,6 +437,21 @@ test('production token is memory-only and messages are session bound', () => {
   assert.doesNotMatch(source, /postMessage\([^;]+,\s*["']\*["']\s*\)/s);
 });
 
+test('scene thumbnails select CORS mode before starting the request', () => {
+  const picker = sourceBetween(
+    'function renderScenePicker',
+    'function setScenePickerOpen'
+  );
+  const crossOrigin = picker.indexOf('image.crossOrigin = "anonymous"');
+  const sourceAssignment = picker.indexOf('image.src = scene.thumbnail');
+  assert.ok(crossOrigin >= 0, 'thumbnail declares anonymous CORS');
+  assert.ok(sourceAssignment > crossOrigin, 'CORS mode is set before src');
+  assert.match(
+    picker,
+    /image\.addEventListener\([\s\S]*?"error"[\s\S]*?createSceneThumbnailPlaceholder\(\)[\s\S]*?\{ once: true \}/
+  );
+});
+
 test('development token entry needs every explicit safety gate', () => {
   assert.match(source, /isLoopbackHost\(window\.location\.hostname\)/);
   assert.match(source, /config\.allowDevelopmentToken === true/);
