@@ -83,6 +83,7 @@ function loadPlatformRequest(fetchImpl, { timeoutMs = 1000, backoffMs = 0 } = {}
     'state',
     'allowedPlatformApiOrigins',
     'isAllowedSecureOrigin',
+    'isAllowedPlatformRequestUrl',
     'getRequestTimeoutMs',
     'window',
     `${retryConstants}\n${previewError}\n${requestFunctions}\nreturn requestPlatformResponse;`
@@ -90,6 +91,7 @@ function loadPlatformRequest(fetchImpl, { timeoutMs = 1000, backoffMs = 0 } = {}
     fetchImpl,
     { token: 'memory-token' },
     () => ['https://api.example.test'],
+    () => true,
     () => true,
     () => timeoutMs,
     testWindow

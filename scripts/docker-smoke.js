@@ -33,6 +33,8 @@ try {
     '--detach',
     '--name',
     containerName,
+    '--env',
+    'HOST_API_BASE=https://127.0.0.1:9',
     '--publish',
     `127.0.0.1:${port}:80`,
     imageRef,

@@ -1,5 +1,5 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.07.31.1";
+const WEBGL_PREVIEW_VERSION = "2026.08.01.1";
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const ASSET_PATH_RE =
@@ -1155,7 +1155,54 @@ function isAllowedSecureOrigin(url, allowedOrigins) {
   return isExplicitLocalDevelopment() && url.protocol === "http:" && isLoopbackHost(url.hostname);
 }
 
+function resolvePlatformApiAlias() {
+  const candidate = state.runtimeConfig.platformApiAlias;
+  if (typeof candidate !== "string" || !candidate.trim()) return "";
+
+  try {
+    const url = new URL(candidate.trim(), window.location.href);
+    if (
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash ||
+      url.origin !== window.location.origin ||
+      (url.protocol !== "https:" &&
+        !(isExplicitLocalDevelopment() && url.protocol === "http:"))
+    ) {
+      return "";
+    }
+    const pathname = url.pathname.replace(/\/+$/, "");
+    if (!pathname || pathname === "/" || pathname.split("/").includes("..")) {
+      return "";
+    }
+    url.pathname = pathname;
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return "";
+  }
+}
+
+function isAllowedPlatformRequestUrl(url) {
+  const aliasBase = resolvePlatformApiAlias();
+  if (aliasBase) {
+    const alias = new URL(`${aliasBase}/`);
+    if (url.origin === alias.origin) {
+      const listPath = `${alias.pathname.replace(/\/+$/, "")}/v1/verses`;
+      if (url.pathname === listPath) return true;
+      if (url.pathname.startsWith(`${listPath}/`)) {
+        return /^[1-9]\d*$/.test(url.pathname.slice(listPath.length + 1));
+      }
+      return false;
+    }
+  }
+  return isAllowedSecureOrigin(url, allowedPlatformApiOrigins());
+}
+
 function resolveApiBase() {
+  const aliasBase = resolvePlatformApiAlias();
+  if (aliasBase) return aliasBase;
+
   const candidates = [
     state.config.platformApiBase,
     state.config.apiBase,
@@ -1190,12 +1237,13 @@ function resolvePlatformUrl(pathname) {
     );
   }
   const base = new URL(`${apiBase.replace(/\/+$/, "")}/`);
-  if (!isAllowedSecureOrigin(base, allowedPlatformApiOrigins())) {
+  const resolved = new URL(String(pathname).replace(/^\/+/, ""), base);
+  if (!isAllowedPlatformRequestUrl(resolved)) {
     throw new PreviewError("WGP-API-ORIGIN", "Platform API origin denied", {
       retryable: false,
     });
   }
-  return new URL(String(pathname).replace(/^\/+/, ""), base);
+  return resolved;
 }
 
 function resolveAssetBaseOrigin() {
@@ -1614,7 +1662,7 @@ async function requestPlatformResponse(url, { signal, code = "WGP-API" } = {}) {
       retryable: false,
     });
   }
-  if (!isAllowedSecureOrigin(url, allowedPlatformApiOrigins())) {
+  if (!isAllowedPlatformRequestUrl(url)) {
     throw new PreviewError("WGP-API-ORIGIN", "Platform API origin denied", {
       retryable: false,
     });
@@ -1629,13 +1677,12 @@ async function requestPlatformResponse(url, { signal, code = "WGP-API" } = {}) {
         method: "GET",
         cache: "no-store",
         credentials: "omit",
+        redirect: "error",
         referrerPolicy: "no-referrer",
         signal: request.signal,
         headers: {
           Accept: "application/json",
           Authorization: `Bearer ${state.token}`,
-          "Cache-Control": "no-cache",
-          Pragma: "no-cache",
         },
       });
       if (!response.ok) {

@@ -355,6 +355,24 @@ const loadServiceWorker = ({
   );
   return {
     ...context.__SW_TEST__,
+    async dispatchFetch(request) {
+      let responsePromise;
+      const pending = [];
+      listeners.get('fetch')({
+        request,
+        clientId: 'preview-client',
+        respondWith(promise) {
+          responsePromise = Promise.resolve(promise);
+        },
+        waitUntil(promise) {
+          pending.push(promise);
+        },
+      });
+      assert.ok(responsePromise, `Service Worker did not intercept ${request.url}`);
+      const response = await responsePromise;
+      await Promise.all(pending);
+      return response;
+    },
     async dispatchMessage(data, source = { id: 'preview-client' }) {
       const pending = [];
       listeners.get('message')({
@@ -389,6 +407,38 @@ const scopeCases = [
   { label: 'root', scope: 'https://preview.test/' },
   { label: 'subpath', scope: 'https://preview.test/webgl-preview/' },
 ];
+
+for (const { label, scope } of scopeCases) {
+  test(`${label}: Platform API alias bypasses every Service Worker cache`, async () => {
+    const storage = new MemoryCacheStorage();
+    const requests = [];
+    const runtime = loadServiceWorker({
+      scope,
+      caches: storage,
+      fetchImpl: async (request) => {
+        requests.push(request);
+        return new Response('{"success":true}', {
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+    const request = new Request(
+      new URL('platform-api/v1/verses?page=1', scope),
+      { headers: { Authorization: 'Bearer scene-list-test' } }
+    );
+
+    const response = await runtime.dispatchFetch(request);
+
+    assert.equal(response.status, 200);
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].url, request.url);
+    assert.equal(
+      requests[0].headers.get('authorization'),
+      'Bearer scene-list-test'
+    );
+    assert.deepEqual(await storage.keys(), []);
+  });
+}
 
 const buildFixture = (revisionDigit) => {
   const buildId = `sha256:${revisionDigit.repeat(64)}`;

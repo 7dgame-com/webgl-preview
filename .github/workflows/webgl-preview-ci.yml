@@ -120,7 +120,7 @@ jobs:
             docker image rm "${IMAGE_REF}" >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
-          docker run --detach --name "${CONTAINER_NAME}" --publish 127.0.0.1:3006:80 "${IMAGE_REF}"
+          docker run --detach --name "${CONTAINER_NAME}" --env HOST_API_BASE=https://127.0.0.1:9 --publish 127.0.0.1:3006:80 "${IMAGE_REF}"
           node scripts/container-smoke.js http://127.0.0.1:3006
           node scripts/subpath-container-smoke.js http://127.0.0.1:3006
           node --experimental-websocket scripts/browser-smoke.js http://127.0.0.1:3006
@@ -202,7 +202,7 @@ jobs:
           }
           trap cleanup EXIT
           docker pull "${IMAGE_REF}"
-          docker run --detach --name "${CONTAINER_NAME}" --publish 127.0.0.1:3006:80 "${IMAGE_REF}"
+          docker run --detach --name "${CONTAINER_NAME}" --env HOST_API_BASE=https://127.0.0.1:9 --publish 127.0.0.1:3006:80 "${IMAGE_REF}"
           node scripts/container-smoke.js http://127.0.0.1:3006
           node scripts/subpath-container-smoke.js http://127.0.0.1:3006
           node --experimental-websocket scripts/browser-smoke.js http://127.0.0.1:3006

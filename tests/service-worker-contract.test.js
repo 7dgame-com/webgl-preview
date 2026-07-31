@@ -116,6 +116,27 @@ test('only allowlisted cross-origin scene resources are intercepted', () => {
   assert.doesNotMatch(source, /headers\.get\(["']cookie["']\)/i);
 });
 
+test('the fixed Platform API alias is explicitly network-only', () => {
+  const fetchStart = source.indexOf('self.addEventListener("fetch"');
+  const platformGate = source.indexOf(
+    'const platformApiAlias = scopeUrl(`${PLATFORM_API_ALIAS_SEGMENT}/`)',
+    fetchStart
+  );
+  const sceneGate = source.indexOf(
+    'if (url.pathname === sceneEndpointUrl().pathname)',
+    platformGate
+  );
+  const platformBlock = source.slice(platformGate, sceneGate);
+
+  assert.ok(fetchStart > 0);
+  assert.ok(platformGate > fetchStart);
+  assert.ok(sceneGate > platformGate);
+  assert.match(platformBlock, /event\.respondWith\(fetch\(event\.request\)\)/);
+  assert.match(platformBlock, /return;/);
+  assert.doesNotMatch(platformBlock, /caches\.(?:open|match)/);
+  assert.doesNotMatch(platformBlock, /getBuildManifest/);
+});
+
 test('no-cors opaque responses are direct-only and never cached', () => {
   const noCorsGate = source.indexOf(
     'request.headers.has("range") || request.mode === "no-cors"'

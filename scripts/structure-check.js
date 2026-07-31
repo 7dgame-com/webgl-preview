@@ -22,6 +22,7 @@ const required = [
   'scripts/build-manifest.js',
   'scripts/check-base-image.js',
   'scripts/check-artifact-compatibility.js',
+  'scripts/validate-host-api-base.sh',
   'scripts/subpath-container-smoke.js',
   'tests/build-manifest.test.js',
   'tests/browser-smoke.test.js',
@@ -61,6 +62,9 @@ for (const snippet of [
   'build-manifest.js verify',
   'check-artifact-compatibility.js',
   'COPY --from=final-verifier /verified',
+  'NGINX_ENVSUBST_FILTER="^HOST_API_BASE$"',
+  '/etc/nginx/templates/default.conf.template',
+  '/docker-entrypoint.d/15-validate-host-api-base.sh',
 ]) {
   if (!dockerfile.includes(snippet)) {
     console.error(`Dockerfile is missing delivery gate: ${snippet}`);

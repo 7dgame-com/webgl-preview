@@ -9,6 +9,8 @@ services:
         REQUIRE_APPROVED_BUILD: ${REQUIRE_APPROVED_BUILD:-0}
     ports:
       - '127.0.0.1:3006:80'
+    environment:
+      HOST_API_BASE: ${HOST_API_BASE:-https://d.dev.xrugc.com}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1/api/health"]
       interval: 30s

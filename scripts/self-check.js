@@ -83,6 +83,9 @@ const checkRuntimeConfig = () => {
   if (config.allowManualSceneId !== false) {
     fail('Production runtime config must hide manual scene IDs by default');
   }
+  if (config.platformApiAlias !== './platform-api') {
+    fail('Production runtime config must use the fixed same-origin Platform API alias');
+  }
 };
 
 const checkNetworkConfig = () => {
@@ -96,6 +99,14 @@ const checkNetworkConfig = () => {
     'location = /artifact-compatibility.json',
     'location = /modules/sw-build-cache.js',
     'location = /sw.js',
+    'location ~ ^/platform-api/v1/verses(?:/[1-9][0-9]*)?$',
+    'proxy_pass ${HOST_API_BASE}',
+    'proxy_pass_request_headers off',
+    'proxy_ssl_verify on',
+    'proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt',
+    'proxy_hide_header Set-Cookie',
+    'proxy_hide_header Location',
+    'add_header Cache-Control "no-store" always',
   ]) {
     if (!nginxConfig.includes(expectedSnippet)) {
       fail(`Missing nginx config snippet: ${expectedSnippet}`);
@@ -103,11 +114,39 @@ const checkNetworkConfig = () => {
   }
   for (const forbiddenSnippet of [
     'proxy_pass $arg_url',
-    'proxy_set_header Authorization',
+    'proxy_set_header Origin',
+    'proxy_set_header Cookie',
   ]) {
     if (nginxConfig.includes(forbiddenSnippet)) {
       fail(`Forbidden arbitrary proxy configuration: ${forbiddenSnippet}`);
     }
+  }
+
+  const proxyTargets = [...nginxConfig.matchAll(/proxy_pass\s+([^;]+);/g)].map(
+    (match) => match[1].trim()
+  );
+  if (
+    proxyTargets.length !== 1 ||
+    proxyTargets[0] !== '${HOST_API_BASE}'
+  ) {
+    fail('nginx may proxy only to the validated HOST_API_BASE template value');
+  }
+
+  const aliasStart = nginxConfig.indexOf(
+    'location ~ ^/platform-api/v1/verses(?:/[1-9][0-9]*)?$'
+  );
+  const aliasEnd = nginxConfig.indexOf('\n  # Extensionless unknown routes', aliasStart);
+  const aliasBlock = nginxConfig.slice(aliasStart, aliasEnd);
+  const forwardedHeaders = [
+    ...aliasBlock.matchAll(/proxy_set_header\s+([^\s;]+)\s+([^;]*);/g),
+  ]
+    .filter((match) => match[2].trim() !== '""')
+    .map((match) => match[1]);
+  if (
+    JSON.stringify(forwardedHeaders) !==
+    JSON.stringify(['Host', 'Accept', 'Authorization'])
+  ) {
+    fail('Platform API alias may forward only Host, Accept and Authorization');
   }
 };
 
@@ -123,6 +162,8 @@ const checkServiceWorker = () => {
     'SCENE_CACHE_MAX_BYTES',
     'background-started',
     'request.headers.has("range")',
+    'PLATFORM_API_ALIAS_SEGMENT',
+    'event.respondWith(fetch(event.request))',
   ]) {
     if (!source.includes(expectedSnippet)) {
       fail(`Service worker is missing contract: ${expectedSnippet}`);

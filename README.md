@@ -56,8 +56,10 @@ Unity WebGL `.gz` assets require correct `Content-Encoding` and
 `.framework.js.gz`, and `.wasm.gz` before serving static files.
 
 The shell obtains its production Token only from the session-bound Host
-handshake, lists the authenticated user's scenes through `GET /v1/verses`, and
-keeps signed scene assets on an explicit HTTPS allowlist. The removed
+handshake and lists the authenticated user's scenes through the same-origin,
+network-only `GET ./platform-api/v1/verses` alias. The container forwards only
+the fixed Verse list/detail routes to the validated `HOST_API_BASE`, while
+signed scene assets stay on an explicit HTTPS allowlist. The removed
 `/__xrugc_proxy__` and `/api/snapshot` compatibility endpoints always return
 404.
 

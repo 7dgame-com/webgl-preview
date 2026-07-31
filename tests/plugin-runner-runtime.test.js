@@ -51,6 +51,44 @@ async function initialize(harness, token = 'token-a') {
   );
 }
 
+test('same-origin fixed API alias wins when INIT omits apiBase', async () => {
+  const hostOrigin = 'https://d.dev.xrugc.com';
+  const harness = await createPluginRunnerHarness({
+    hostOrigin,
+    runtimeConfig: {
+      platformApiOrigins: ['https://xrugc.com', hostOrigin],
+      platformApiAlias: './platform-api',
+    },
+    onFetch(call) {
+      if (
+        new URL(call.url).pathname ===
+        '/webgl-preview/platform-api/v1/verses'
+      ) {
+        return listResponse([{ id: 1, name: 'Development scene' }]);
+      }
+      throw new Error(`Unexpected fetch: ${call.url}`);
+    },
+  });
+
+  await initialize(harness);
+
+  assert.equal(Object.hasOwn(harness.api.state.config, 'apiBase'), false);
+  assert.equal(harness.api.state.sceneListStatus, 'ready');
+  const requests = platformCalls(harness);
+  assert.equal(requests.length, 1);
+  const request = requests[0];
+  assert.equal(new URL(request.url).origin, 'https://preview.example.test');
+  assert.equal(
+    new URL(request.url).pathname,
+    '/webgl-preview/platform-api/v1/verses'
+  );
+  assert.equal(request.options.cache, 'no-store');
+  assert.equal(request.options.redirect, 'error');
+  assert.equal(request.headers.authorization, 'Bearer token-a');
+  assert.equal(Object.hasOwn(request.headers, 'cache-control'), false);
+  assert.equal(Object.hasOwn(request.headers, 'pragma'), false);
+});
+
 test('trusted handshake drives search, pagination, selection, and pre-run authorization', async () => {
   const lua = deferred();
   const javascript = deferred();

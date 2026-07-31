@@ -42,6 +42,8 @@ test('container smoke inspects final routes and every manifest artifact', () => 
     '/__xrugc_proxy__',
     '/api/snapshot',
     '/__xrugc_scene_resource__',
+    '/platform-api/v1/verses',
+    '/platform-api/v1/users',
   ]) {
     assert.match(smoke, new RegExp(route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
@@ -63,6 +65,10 @@ test('local Docker smoke keeps the image CMD and cleans up its exact container',
   );
   assert.doesNotMatch(dockerSmoke, /docker[^\n]*compose[^\n]*run/);
   assert.match(dockerSmoke, /'run'/);
+  assert.match(
+    dockerSmoke,
+    /'--env',\s*'HOST_API_BASE=https:\/\/127\.0\.0\.1:9'/
+  );
   assert.match(dockerSmoke, /'rm', '--force', containerName/);
   assert.match(dockerSmoke, /scripts\/container-smoke\.js/);
   assert.match(dockerSmoke, /scripts\/subpath-container-smoke\.js/);
@@ -133,6 +139,14 @@ test('publishing CI smokes the exact pushed digest and always cleans up', () => 
     /publish:[\s\S]*needs: \[test, security-contract, container-gate\]/
   );
   assert.equal((workflow.match(/REQUIRE_APPROVED_BUILD=1/g) || []).length, 2);
+  assert.equal(
+    (
+      workflow.match(
+        /--env HOST_API_BASE=https:\/\/127\.0\.0\.1:9/g
+      ) || []
+    ).length,
+    2
+  );
   assert.equal(
     (workflow.match(/node scripts\/subpath-container-smoke\.js/g) || []).length,
     2

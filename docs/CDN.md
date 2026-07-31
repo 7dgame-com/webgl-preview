@@ -32,6 +32,7 @@ Honor the nginx `Cache-Control` response:
 /webgl-preview/sw.js                         revalidate
 /webgl-preview/build-manifest.json           revalidate
 /webgl-preview/runtime-config.json           no-store
+/webgl-preview/platform-api/v1/verses[...]  no-store, never CDN-cache
 ```
 
 Do not normalize away the Build Manifest revision query. Runner requests carry
@@ -43,6 +44,12 @@ The Service Worker does not block foreground Unity startup on the approximately
 cache is bounded by entries, per-entry bytes, and total bytes. Old build caches
 are retained as rollback candidates until the complete new four-file set is
 available, then pruned to a bounded count.
+
+The authenticated Platform API alias is a network-only boundary and must never
+be cached by a CDN or Service Worker. Forward it to this plugin container; do
+not configure a CDN-origin rewrite directly to the Platform API. The container
+accepts only the fixed list/detail Verse routes and obtains its upstream solely
+from the validated `HOST_API_BASE` deployment environment value.
 
 ## Scene asset traffic
 

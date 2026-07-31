@@ -10,6 +10,7 @@ const BUILD_CACHE_PREFIX = "xrugc-webgl-preview-build-v3-";
 const SCENE_CACHE_PREFIX = "xrugc-webgl-preview-scene-v2-";
 const SCENE_CACHE_NAME = `${SCENE_CACHE_PREFIX}resources`;
 const SCENE_RESOURCE_ENDPOINT = "__xrugc_scene_resource__";
+const PLATFORM_API_ALIAS_SEGMENT = "platform-api";
 const BUILD_REVISION_QUERY = "__xrugc_build";
 const BUILD_CACHE_MAX_ENTRIES = 8;
 const BUILD_CACHE_MAX_BYTES = 768 * 1024 * 1024;
@@ -723,6 +724,18 @@ self.addEventListener("fetch", (event) => {
     if (targetUrl) {
       event.respondWith(handleSceneResourceRequest(event, targetUrl));
     }
+    return;
+  }
+
+  // Authenticated Platform API responses are always network-only. Do not load
+  // the Build Manifest and do not make them eligible for any Cache Storage
+  // path, even when the Service Worker controls a subpath deployment.
+  const platformApiAlias = scopeUrl(`${PLATFORM_API_ALIAS_SEGMENT}/`);
+  if (
+    url.pathname === platformApiAlias.pathname.slice(0, -1) ||
+    url.pathname.startsWith(platformApiAlias.pathname)
+  ) {
+    event.respondWith(fetch(event.request));
     return;
   }
 

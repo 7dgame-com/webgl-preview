@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const http = require('node:http');
+const https = require('node:https');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..', 'public');
@@ -15,6 +16,9 @@ function normalizeBasePath(value) {
 
 const basePath = normalizeBasePath(process.env.BASE_PATH || '/');
 const basePrefix = basePath === '/' ? '' : basePath.slice(0, -1);
+const PLATFORM_API_ALIAS_PATH = '/platform-api';
+const PLATFORM_VERSE_PATH_RE = /^\/platform-api\/v1\/verses(?:\/[1-9]\d*)?$/;
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 
 const contentTypes = new Map([
   ['.css', 'text/css; charset=utf-8'],
@@ -112,6 +116,130 @@ function sendJson(res, status, data, cacheControl = 'no-store') {
     'Referrer-Policy': 'no-referrer',
   });
   res.end(body);
+}
+
+function sendPlatformApiError(res, status, error) {
+  const body = JSON.stringify({ success: false, error });
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Content-Length': Buffer.byteLength(body),
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer',
+  });
+  res.end(body);
+}
+
+function parseDevelopmentPlatformApiBase(value) {
+  let upstream;
+  try {
+    upstream = new URL(String(value || '').trim());
+  } catch {
+    throw new Error('PLATFORM_API_BASE must be an absolute URL');
+  }
+
+  const hostname = upstream.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  const secure = upstream.protocol === 'https:';
+  const localHttp = upstream.protocol === 'http:' && LOOPBACK_HOSTS.has(hostname);
+  if (
+    (!secure && !localHttp) ||
+    upstream.username ||
+    upstream.password ||
+    upstream.search ||
+    upstream.hash
+  ) {
+    throw new Error(
+      'PLATFORM_API_BASE must be credential-free HTTPS or a loopback HTTP base'
+    );
+  }
+
+  upstream.pathname = upstream.pathname.replace(/\/+$/, '');
+  return upstream;
+}
+
+function firstHeaderValue(value) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function proxyPlatformApi(req, res, requestUrl, localPath) {
+  let upstream;
+  try {
+    upstream = parseDevelopmentPlatformApiBase(process.env.PLATFORM_API_BASE);
+  } catch (error) {
+    sendPlatformApiError(
+      res,
+      502,
+      error instanceof Error ? error.message : 'Platform API is unavailable'
+    );
+    return;
+  }
+
+  const aliasSuffix = localPath.slice(PLATFORM_API_ALIAS_PATH.length);
+  upstream.pathname = `${upstream.pathname}${aliasSuffix}`;
+  upstream.search = requestUrl.search;
+
+  const authorization = firstHeaderValue(req.headers.authorization);
+  const accept = firstHeaderValue(req.headers.accept) || 'application/json';
+  const headers = {
+    Host: upstream.host,
+    Accept: accept,
+  };
+  if (authorization) headers.Authorization = authorization;
+
+  const transport = upstream.protocol === 'https:' ? https : http;
+  const upstreamRequest = transport.request(
+    upstream,
+    {
+      method: req.method,
+      headers,
+    },
+    (upstreamResponse) => {
+      const status = upstreamResponse.statusCode || 502;
+      if ([301, 302, 303, 307, 308].includes(status)) {
+        upstreamResponse.resume();
+        sendPlatformApiError(res, 502, 'Platform API redirect denied');
+        return;
+      }
+
+      const responseHeaders = {
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+        'Referrer-Policy': 'no-referrer',
+      };
+      for (const name of [
+        'content-type',
+        'content-length',
+        'x-pagination-current-page',
+        'x-pagination-page-count',
+        'x-pagination-per-page',
+        'x-pagination-total-count',
+      ]) {
+        const value = firstHeaderValue(upstreamResponse.headers[name]);
+        if (value !== undefined) responseHeaders[name] = value;
+      }
+
+      res.writeHead(status, responseHeaders);
+      if (req.method === 'HEAD') {
+        upstreamResponse.resume();
+        res.end();
+        return;
+      }
+      upstreamResponse.pipe(res);
+    }
+  );
+
+  upstreamRequest.on('error', () => {
+    if (!res.headersSent) {
+      sendPlatformApiError(res, 502, 'Platform API request failed');
+    } else {
+      res.end();
+    }
+  });
+  req.on('aborted', () => upstreamRequest.destroy());
+  res.on('close', () => {
+    if (!upstreamRequest.destroyed) upstreamRequest.destroy();
+  });
+  upstreamRequest.end();
 }
 
 function stripBasePath(urlPath) {
@@ -227,6 +355,19 @@ const server = http.createServer((req, res) => {
     localPath === '/__xrugc_scene_resource__'
   ) {
     sendJson(res, 404, { success: false, error: 'Endpoint removed' });
+    return;
+  }
+
+  if (PLATFORM_VERSE_PATH_RE.test(localPath)) {
+    proxyPlatformApi(req, res, url, localPath);
+    return;
+  }
+
+  if (
+    localPath === PLATFORM_API_ALIAS_PATH ||
+    localPath.startsWith(`${PLATFORM_API_ALIAS_PATH}/`)
+  ) {
+    sendPlatformApiError(res, 404, 'Platform API route not found');
     return;
   }
 

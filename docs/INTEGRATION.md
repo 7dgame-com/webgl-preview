@@ -64,24 +64,29 @@ progress, error and dispose messages.
   "enabled": true,
   "order": 3,
   "accessScope": "auth-only",
-  "version": "1.0.0",
-  "extraConfig": {
-    "apiBase": "https://d.dev.xrugc.com/api"
-  }
+  "version": "1.0.0"
 }
 ```
 
-Production uses `https://xrugc.com/api` and the matching trusted Host origin.
-`apiBase` is accepted only when its exact origin appears in
-`runtime-config.json.platformApiOrigins`; it is not inferred from an arbitrary
-referrer.
+The registration does not need `extraConfig.apiBase`. The production runtime
+uses the plugin-owned relative alias `./platform-api`; the browser therefore
+stays on the plugin registration origin and keeps working at both `/` and a
+strip-prefix `/webgl-preview/` route. The container requires one deployment
+value: `HOST_API_BASE=https://d.dev.xrugc.com` on develop and
+`HOST_API_BASE=https://xrugc.com` on production. It must be an exact,
+credential-free HTTPS origin without a path, query or fragment.
+
+An explicit external `apiBase` remains a compatibility fallback only when the
+same-origin alias is absent, and is accepted only when its exact origin appears
+in `runtime-config.json.platformApiOrigins`; it is never inferred from an
+arbitrary referrer.
 
 ## “My scenes” API contract
 
 After INIT, the Shell sends a Bearer-authenticated request to:
 
 ```text
-GET {apiBase}/v1/verses
+GET {registrationRoot}/platform-api/v1/verses
   ?sort=-updated_at
   &page=1
   &per-page=20
@@ -95,18 +100,28 @@ The server derives the owner from the JWT and always applies
 `X-Pagination-Per-Page` and `X-Pagination-Total-Count`.
 
 Running a selected, URL-supplied or manually entered id uses the same protected
-`GET /v1/verses/{id}` view authorization. The existing endpoint supplies the
-required metas/resources/code expansions, so there is no generic snapshot or
-URL proxy endpoint.
+`GET {registrationRoot}/platform-api/v1/verses/{id}` alias. Nginx maps only
+those two fixed shapes to `{HOST_API_BASE}/api/v1/verses[/{id}]`; all other
+alias paths fail with 404 and non-read methods are denied before proxying. The
+existing endpoint supplies the required metas/resources/code expansions, so
+there is no generic snapshot or URL proxy endpoint.
 
-For a cross-origin plugin deployment, configure the API environment variable:
+The alias forwards only `Host`, `Accept` and the in-memory `Authorization`
+header. It does not forward browser `Cookie` or `Origin`, rejects upstream
+redirects, strips `Set-Cookie`, `Location` and CORS response headers, verifies
+the upstream TLS certificate, and always responds with `Cache-Control:
+no-store`. The Service Worker explicitly keeps the alias network-only.
+
+The browser-to-API request is same-origin even when the plugin uses its
+independent plugin domain, so it does not require API CORS configuration.
+`CORS_ALLOWED_ORIGINS` is needed only for the legacy direct-origin fallback:
 
 ```text
 CORS_ALLOWED_ORIGINS=https://webgl-preview.plugins.xrugc.com
 ```
 
-The CORS response permits `Authorization` and exposes the four pagination
-headers. Same-origin `/webgl-preview/` deployment needs no extra CORS origin.
+That fallback CORS response must permit `Authorization` and expose the four
+pagination headers.
 
 ## Asset and compatibility policy
 

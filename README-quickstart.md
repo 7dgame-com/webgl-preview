@@ -63,9 +63,14 @@ immutable reference even for local verification:
 ```bash
 export WEBGL_PREVIEW_BASE_IMAGE='hkccr.ccs.tencentyun.com/plugins/webgl-preview@sha256:1e03190d0b44ca204869461862859198a801edb3b4c1bf00e8ee5e8da1d9bfe5'
 export REQUIRE_APPROVED_BUILD=1
+export HOST_API_BASE='https://d.dev.xrugc.com'
 docker compose build
 docker compose up -d
 ```
+
+`HOST_API_BASE` is required at container startup and must be an exact HTTPS
+origin. The container appends only its fixed `/api/v1/verses` list/detail
+paths; do not include `/api` in the environment value.
 
 The image build regenerates `build-manifest.json` from the inherited real files
 and fails on missing files, LFS pointers, invalid gzip/Brotli content, size or

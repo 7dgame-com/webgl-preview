@@ -7,6 +7,13 @@
       "unityBaseImage": "hkccr.ccs.tencentyun.com/plugins/webgl-preview@sha256:1e03190d0b44ca204869461862859198a801edb3b4c1bf00e8ee5e8da1d9bfe5",
       "sourceRevision": "6906e1525dec4b6cb0caf5c3b1d12145c22203ca",
       "status": "approved"
+    },
+    {
+      "previewShellVersion": "2026.08.01.1",
+      "unityBuildId": "sha256:7bee87bbf1c044802841b46489638cb5069eac5b51fb0637714a3b826b092f33",
+      "unityBaseImage": "hkccr.ccs.tencentyun.com/plugins/webgl-preview@sha256:1e03190d0b44ca204869461862859198a801edb3b4c1bf00e8ee5e8da1d9bfe5",
+      "sourceRevision": "6906e1525dec4b6cb0caf5c3b1d12145c22203ca",
+      "status": "approved"
     }
   ]
 }

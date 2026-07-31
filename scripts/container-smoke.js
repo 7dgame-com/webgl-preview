@@ -46,8 +46,11 @@ async function waitForHealth(baseUrl) {
   throw lastError || new Error('container health timed out');
 }
 
-async function expectStatus(baseUrl, pathname, status) {
-  const response = await request(baseUrl, pathname, { redirect: 'manual' });
+async function expectStatus(baseUrl, pathname, status, init = {}) {
+  const response = await request(baseUrl, pathname, {
+    redirect: 'manual',
+    ...init,
+  });
   assert.equal(response.status, status, `${pathname} should return ${status}`);
   return response;
 }
@@ -145,6 +148,32 @@ async function main(baseUrl = defaultBaseUrl) {
   assert.ok(Array.isArray(runtime.trustedHostOrigins));
   assert.ok(Array.isArray(runtime.platformApiOrigins));
   assert.ok(Array.isArray(runtime.assetOrigins));
+  assert.equal(runtime.platformApiAlias, './platform-api');
+
+  const platformApi = await expectStatus(
+    baseUrl,
+    '/platform-api/v1/verses?page=1',
+    502,
+    { headers: { Authorization: 'Bearer container-smoke' } }
+  );
+  assert.equal(platformApi.headers.get('cache-control'), 'no-store');
+  assert.equal(platformApi.headers.get('access-control-allow-origin'), null);
+  assert.equal(platformApi.headers.get('set-cookie'), null);
+  assert.equal(platformApi.headers.get('location'), null);
+
+  for (const pathname of [
+    '/platform-api',
+    '/platform-api/',
+    '/platform-api/v1/users',
+    '/platform-api/v1/verses/0',
+    '/platform-api/v1/verses/1/extra',
+    '/platform-api/http://127.0.0.1/private',
+  ]) {
+    await expectStatus(baseUrl, pathname, 404);
+  }
+  for (const method of ['POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']) {
+    await expectStatus(baseUrl, '/platform-api/v1/verses', 403, { method });
+  }
 
   const buildResponse = await expectStatus(baseUrl, '/build-manifest.json', 200);
   assertSecurityHeaders(buildResponse, 'build manifest');
