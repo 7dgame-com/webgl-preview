@@ -1,36 +1,48 @@
 # WebGL Preview Integration
 
-## Plugin Manifest
+## Entries and base path
 
-The host should read:
-
-```text
-GET /plugin/manifest
-```
-
-The manifest declares the iframe entry:
+The Host reads `GET ./plugin/manifest` from the plugin registration root. The
+manifest intentionally uses relative entries:
 
 ```json
 {
   "id": "webgl-preview",
   "entry": {
-    "frontend": "/index.html",
-    "runner": "/embed.html"
+    "frontend": "./index.html",
+    "runner": "./embed.html"
   },
-  "ui": {
-    "mode": "iframe"
-  }
+  "ui": { "mode": "iframe" }
 }
 ```
 
-`/index.html` is the standalone plugin shell. It accepts a scene id, reads the
-scene from the platform API using the host-provided plugin token, and forwards
-the normalized scene payload to the packaged Unity runner.
+`index.html` is the user-facing Preview Shell. `embed.html` is the internal
+Unity Runner and must not replace the shell as the menu registration URL. Both
+work at an independent-domain root or below `/webgl-preview/`; every owned URL
+is resolved relative to the registration root.
 
-`/embed.html` remains the low-level Unity runner used by the main web frontend's
-inline "Run Scene" button.
+For the platform path, Traefik routes `PathPrefix(/webgl-preview)` to this
+container and strips that prefix before nginx. The browser-visible Host URL,
+manifest root, Service Worker scope and API configuration must still use the
+same `/webgl-preview/` registration root.
 
-## Recommended Registration
+## Trusted Host handshake
+
+1. The shell loads same-origin `runtime-config.json` and identifies the parent
+   only from `trustedHostOrigins`.
+2. It generates a random `handshakeSession` and sends it in
+   `PLUGIN_READY.payload.handshakeSession` using the exact parent origin.
+3. The Host validates iframe source and registered `allowedOrigin`, then echoes
+   the session inside `INIT.payload` with the Token and plugin config.
+4. `TOKEN_UPDATE`, `DESTROY`, language, theme and other control messages remain
+   bound to the same window, origin and session.
+5. The Token stays in memory. URL parameters, referrer, localStorage and
+   sessionStorage are never Token sources.
+
+The Shell and internal Runner use a separate same-origin Run Session for scene,
+progress, error and dispose messages.
+
+## Recommended registration
 
 ```json
 {
@@ -43,9 +55,10 @@ inline "Run Scene" button.
     "ja-JP": "WebGL シーンランナー",
     "th-TH": "ตัวรันฉาก WebGL"
   },
-  "description": "输入场景号并用 Unity WebGL 运行对应 XRUGC 场景",
+  "description": "从我的场景中选择并使用 Unity WebGL 运行 XRUGC 场景",
   "url": "https://webgl-preview.plugins.xrugc.com/",
   "allowedOrigin": "https://webgl-preview.plugins.xrugc.com",
+  "allowedHostOrigins": ["https://d.dev.xrugc.com"],
   "group": "builtins",
   "icon": "VideoPlay",
   "enabled": true,
@@ -58,55 +71,92 @@ inline "Run Scene" button.
 }
 ```
 
-Use the corresponding production API base for production registration:
+Production uses `https://xrugc.com/api` and the matching trusted Host origin.
+`apiBase` is accepted only when its exact origin appears in
+`runtime-config.json.platformApiOrigins`; it is not inferred from an arbitrary
+referrer.
 
-```json
-{
-  "extraConfig": {
-    "apiBase": "https://xrugc.com/api"
-  }
-}
-```
+## “My scenes” API contract
 
-The plugin also infers the API base from the host referrer (`/api`) when
-`extraConfig.apiBase` is not set.
-
-## Portainer Stack Image
-
-The production stack uses:
+After INIT, the Shell sends a Bearer-authenticated request to:
 
 ```text
-hkccr.ccs.tencentyun.com/plugins/webgl-preview:develop
+GET {apiBase}/v1/verses
+  ?sort=-updated_at
+  &page=1
+  &per-page=20
+  &expand=image
+  &VerseSearch[name]=optional-search
 ```
 
-The image is built by the submodule repository workflow. The workflow requires
-the following GitHub Actions secrets in the `webgl-preview` repository, or
-organization-level secrets granted to that repository:
+The server derives the owner from the JWT and always applies
+`verse.author_id = current user`. Pagination uses
+`X-Pagination-Current-Page`, `X-Pagination-Page-Count`,
+`X-Pagination-Per-Page` and `X-Pagination-Total-Count`.
 
-- `TENCENT_REGISTRY_USER`
-- `TENCENT_REGISTRY_PASSWORD`
+Running a selected, URL-supplied or manually entered id uses the same protected
+`GET /v1/verses/{id}` view authorization. The existing endpoint supplies the
+required metas/resources/code expansions, so there is no generic snapshot or
+URL proxy endpoint.
 
-The container serves HTTP on port `80`, matching the `blockly` and `editor`
-frontend plugin images. Portainer/Traefik should route to container port `80`.
-
-## Health Checks
-
-Use either endpoint:
+For a cross-origin plugin deployment, configure the API environment variable:
 
 ```text
+CORS_ALLOWED_ORIGINS=https://webgl-preview.plugins.xrugc.com
+```
+
+The CORS response permits `Authorization` and exposes the four pagination
+headers. Same-origin `/webgl-preview/` deployment needs no extra CORS origin.
+
+## Asset and compatibility policy
+
+- Scene assets keep their signed HTTPS URL semantics and must match an exact
+  `assetOrigins` entry. Platform Token/Cookie headers are stripped.
+- Redirects are rejected by the Service Worker resource path instead of
+  following an unvalidated target.
+- Manual scene id input is hidden in production. It requires
+  `allowManualSceneId=true` or explicit loopback development and still uses the
+  normal scene view authorization.
+- A development Token additionally requires
+  `allowDevelopmentToken=true`; it is memory-only and visibly marked as local.
+
+## Image and health
+
+Publishing uses the checked-in immutable `WEBGL_PREVIEW_BASE_IMAGE` fallback;
+the repository variable is an optional reviewed override and must also be an
+immutable `name@sha256:<digest>`. Registry secrets
+`TENCENT_REGISTRY_USER` and `TENCENT_REGISTRY_PASSWORD` remain required.
+The candidate image is built and container-smoked before publishing. HTTP
+checks are followed by a dependency-free real Chrome/Chromium smoke against
+both root and strip-prefix Runner URLs; the same smoke is repeated against the
+pushed immutable digest. The build also enforces
+`public/artifact-compatibility.json`; add a Shell/build pair there only after
+that exact Unity build has been accepted for the current shell.
+
+The Preview workflow exposes three release gates: `Test`, `Security Contracts`,
+and `Build and Smoke Candidate`. The publish job depends on all three. Configure
+those checks as required for release branches. A coordinated platform release
+must also require the Host repository's `Lint & Test` job and the API
+repository's `test` job, because the handshake and current-user scene boundary
+live in those repositories. Branch protection and any repository-variable
+override are GitHub settings and cannot be inferred from source control; verify
+them during release readiness review.
+
+GitHub-hosted Linux runners normally expose Chrome in a discovered system
+path. Self-hosted runners must either install Chrome/Chromium in a common
+macOS/Linux path or set `CHROME_BIN`. The browser smoke accepts only a local
+HTTP candidate origin and always uses a disposable profile, bounded process
+timeout and locally bound strip-prefix proxy. It uses Node 20's built-in
+experimental WebSocket client to poll Chrome DevTools on real wall-clock time;
+no Playwright/Puppeteer dependency or virtual-time fast-forward is involved.
+
+Health endpoints:
+
+```text
+GET /health
 GET /api/health
 GET /plugin/health
 ```
 
-Expected response shape:
-
-```json
-{
-  "success": true,
-  "data": {
-    "status": "ok",
-    "plugin": "webgl-preview",
-    "publicDirExists": true
-  }
-}
-```
+They return `success: true`, plugin id, public-directory status and, in the
+development server, the configured deployment base path.

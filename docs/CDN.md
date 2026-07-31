@@ -1,60 +1,57 @@
-# WebGL Preview CDN
+# WebGL Preview CDN and cache policy
 
-The WebGL runner should be cached at the CDN edge. Prefer publishing it through
-the platform CDN domain at `/webgl-preview/`, with the `webgl-preview` nginx
-container as the origin.
+Prefer the platform same-origin route `/webgl-preview/`, with the WebGL Preview
+nginx container as origin. An independent plugin domain remains supported when
+the Host/API origin allowlists and CORS environment are configured explicitly.
 
-## Cache Rules
-
-Configure the CDN to honor origin `Cache-Control` headers.
-
-Recommended path rules:
+## Browser-visible routes
 
 ```text
-/webgl-preview/Build/*.data.br     cache 1 year
-/webgl-preview/Build/*.wasm.br     cache 1 year
-/webgl-preview/Build/*.framework.js.br cache 1 year
-/webgl-preview/Build/*.data.gz     cache 1 year
-/webgl-preview/Build/*.wasm.gz     cache 1 year
-/webgl-preview/Build/*.framework.js.gz cache 1 year
-/webgl-preview/Build/*.loader.js   revalidate
-/webgl-preview/embed.html          revalidate
-/webgl-preview/sw.js               revalidate
+https://xrugc.com/webgl-preview/                 user Preview Shell
+https://xrugc.com/webgl-preview/embed.html       internal Unity Runner
+https://d.dev.xrugc.com/webgl-preview/           development Shell
+https://webgl-preview.plugins.xrugc.com/         independent-domain Shell
 ```
 
-The nginx origin sends immutable cache headers for `.br` and `.gz` Unity build
-artifacts, and revalidation headers for `embed.html`, `sw.js`, and loader
-scripts.
+In `docker-compose.stack.yml`, Traefik matches the platform Host and
+`PathPrefix(/webgl-preview)`, then strips the prefix only on the upstream hop.
+The HTML, relative manifest entries and Service Worker scope keep browser URLs
+inside `/webgl-preview/`.
 
-## Production Routing
+## Origin cache headers
 
-The stack exposes both plugin domains and platform same-domain paths:
+Honor the nginx `Cache-Control` response:
 
 ```text
-https://xrugc.com/webgl-preview/embed.html
-https://d.dev.xrugc.com/webgl-preview/embed.html
-https://webgl-preview.plugins.xrugc.com/embed.html
-https://webgl-preview.d.plugins.xrugc.com/embed.html
+/webgl-preview/Build/*.data.{gz,br}          immutable, one year
+/webgl-preview/Build/*.wasm.{gz,br}          immutable, one year
+/webgl-preview/Build/*.framework.js.{gz,br}  immutable, one year
+/webgl-preview/Build/*.loader.js             revalidate
+/webgl-preview/index.html                    revalidate
+/webgl-preview/embed.html                    revalidate
+/webgl-preview/sw.js                         revalidate
+/webgl-preview/build-manifest.json           revalidate
+/webgl-preview/runtime-config.json           no-store
 ```
 
-The preferred production path is `https://xrugc.com/webgl-preview/embed.html`.
-In `docker-compose.stack.yml`, Traefik routes:
+Do not normalize away the Build Manifest revision query. Runner requests carry
+the manifest `buildId`; the Service Worker also incorporates that id into its
+cache name and key. It never reuses a same-named artifact from an older build.
 
-```text
-Host(`xrugc.com`) && PathPrefix(`/webgl-preview`)
-Host(`d.dev.xrugc.com`) && PathPrefix(`/webgl-preview`)
-```
+The Service Worker does not block foreground Unity startup on the approximately
+200 MB background warm. Range requests bypass Cache Storage, and scene-resource
+cache is bounded by entries, per-entry bytes, and total bytes. Old build caches
+are retained as rollback candidates until the complete new four-file set is
+available, then pruned to a bounded count.
 
-to the WebGL preview containers and strips the `/webgl-preview` prefix before
-forwarding to nginx. This keeps browser iframe, postMessage target origin, and
-proxied scene assets on the platform domain.
+## Scene asset traffic
 
-If the platform web container is used as the only public entrypoint, keep:
+There is no public arbitrary URL proxy. Allowlisted signed asset requests remain
+direct HTTPS requests from the controlled page. The Service Worker may handle
+those requests for bounded caching, but reconstructs the upstream request with
+`credentials: omit`, never forwards Authorization/Cookie, and rejects redirects
+instead of following an unvalidated hop. Non-allowlisted origins are not
+intercepted or rewritten.
 
-```text
-APP_UNITY_PREVIEW_UPSTREAM=https://webgl-preview.plugins.xrugc.com
-```
-
-In that mode the browser still uses the platform domain, but the web container
-performs an extra upstream hop. The Traefik `/webgl-preview` route removes that
-extra hop when the platform CDN points directly at the same Traefik entrypoint.
+If CDN/COS CORS does not permit a required direct asset, fix that origin policy
+or regenerate the URL upstream. Do not restore `/__xrugc_proxy__` as a fallback.
