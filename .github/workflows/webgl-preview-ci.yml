@@ -63,10 +63,24 @@ jobs:
       - name: Run security regression gate
         run: npm run test:security
 
+  build_metadata:
+    name: Generate Build Metadata
+    runs-on: ubuntu-latest
+    needs: [test, security-contract]
+    permissions:
+      contents: read
+    outputs:
+      build_version: ${{ steps.build-version.outputs.value }}
+    steps:
+      - name: Generate Beijing build version
+        id: build-version
+        run: |
+          printf 'value=%s\n' "$(TZ=Asia/Shanghai date '+%Y.%m.%d-%H%M')" >> "${GITHUB_OUTPUT}"
+
   container-gate:
     name: Build and Smoke Candidate
     runs-on: ubuntu-latest
-    needs: [test, security-contract]
+    needs: [test, security-contract, build_metadata]
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     permissions:
       contents: read
@@ -101,6 +115,7 @@ jobs:
           push: false
           build-args: |
             WEBGL_PREVIEW_BASE_IMAGE=${{ env.WEBGL_PREVIEW_BASE_IMAGE }}
+            WEBGL_PREVIEW_BUILD_VERSION=${{ needs.build_metadata.outputs.build_version }}
             REQUIRE_PINNED_BASE_IMAGE=1
             REQUIRE_APPROVED_BUILD=1
           tags: webgl-preview:ci-${{ github.run_id }}-${{ github.run_attempt }}
@@ -128,7 +143,7 @@ jobs:
   publish:
     name: Publish Verified Image
     runs-on: ubuntu-latest
-    needs: [test, security-contract, container-gate]
+    needs: [test, security-contract, build_metadata, container-gate]
     if: github.event_name != 'pull_request'
     permissions:
       contents: read
@@ -182,6 +197,7 @@ jobs:
           push: true
           build-args: |
             WEBGL_PREVIEW_BASE_IMAGE=${{ env.WEBGL_PREVIEW_BASE_IMAGE }}
+            WEBGL_PREVIEW_BUILD_VERSION=${{ needs.build_metadata.outputs.build_version }}
             REQUIRE_PINNED_BASE_IMAGE=1
             REQUIRE_APPROVED_BUILD=1
           tags: ${{ steps.meta.outputs.tags }}

@@ -1,6 +1,7 @@
 ARG WEBGL_PREVIEW_BASE_IMAGE=hkccr.ccs.tencentyun.com/plugins/webgl-preview@sha256:1e03190d0b44ca204869461862859198a801edb3b4c1bf00e8ee5e8da1d9bfe5
 ARG ARTIFACT_TOOL_IMAGE=node:20.19.4-alpine3.22@sha256:df02558528d3d3d0d621f112e232611aecfee7cbc654f6b375765f72bb262799
 ARG REQUIRE_APPROVED_BUILD=0
+ARG WEBGL_PREVIEW_BUILD_VERSION=
 
 FROM ${WEBGL_PREVIEW_BASE_IMAGE} AS unity-source
 ARG WEBGL_PREVIEW_BASE_IMAGE
@@ -19,18 +20,37 @@ RUN node scripts/build-manifest.js generate \
       --root public \
       --output public/build-manifest.json
 
+FROM ${ARTIFACT_TOOL_IMAGE} AS shell-builder
+ARG REQUIRE_APPROVED_BUILD
+ARG WEBGL_PREVIEW_BUILD_VERSION
+WORKDIR /work
+COPY public ./public
+COPY scripts/inject-build-version.js ./scripts/inject-build-version.js
+RUN if [ "${REQUIRE_APPROVED_BUILD}" = "1" ]; then \
+      node scripts/inject-build-version.js \
+        --root public \
+        --version "${WEBGL_PREVIEW_BUILD_VERSION}" \
+        --require; \
+    else \
+      node scripts/inject-build-version.js \
+        --root public \
+        --version "${WEBGL_PREVIEW_BUILD_VERSION}"; \
+    fi
+
 FROM unity-source AS runtime
 ARG WEBGL_PREVIEW_BASE_IMAGE
+ARG WEBGL_PREVIEW_BUILD_VERSION
 ENV NGINX_ENVSUBST_FILTER="^HOST_API_BASE$"
 LABEL org.opencontainers.image.title="webgl-preview"
 LABEL org.opencontainers.image.description="Unity WebGL preview plugin for XRUGC"
 LABEL org.opencontainers.image.source="https://github.com/7dgame-com/webgl-preview"
 LABEL org.opencontainers.image.base.name="${WEBGL_PREVIEW_BASE_IMAGE}"
 LABEL io.7dgame.webgl-preview.build-manifest="/build-manifest.json"
+LABEL io.7dgame.webgl-preview.build-version="${WEBGL_PREVIEW_BUILD_VERSION}"
 
 # public/Build is excluded from the context. The real Unity binaries are
 # inherited from unity-source and never replaced by Git LFS pointer files.
-COPY public /usr/share/nginx/html
+COPY --from=shell-builder /work/public /usr/share/nginx/html
 COPY --from=manifest-builder /work/public/build-manifest.json \
   /usr/share/nginx/html/build-manifest.json
 COPY nginx.conf /etc/nginx/templates/default.conf.template
@@ -51,7 +71,9 @@ ARG WEBGL_PREVIEW_BASE_IMAGE
 WORKDIR /verify
 COPY scripts/build-manifest.js ./scripts/build-manifest.js
 COPY scripts/check-artifact-compatibility.js ./scripts/check-artifact-compatibility.js
+COPY scripts/inject-build-version.js ./scripts/inject-build-version.js
 COPY --from=runtime /usr/share/nginx/html ./public
+RUN node scripts/inject-build-version.js --root public --verify
 RUN node scripts/build-manifest.js verify \
       --root public \
       --manifest public/build-manifest.json

@@ -108,7 +108,8 @@ async function main(baseUrl = defaultBaseUrl) {
   const shell = await expectStatus(baseUrl, '/', 200);
   assertSecurityHeaders(shell, 'shell');
   assert.match(shell.headers.get('content-type') || '', /^text\/html/);
-  assert.match(await shell.text(), /data-scene-picker/);
+  const shellMarkup = await shell.text();
+  assert.match(shellMarkup, /data-scene-picker/);
 
   const embed = await expectStatus(baseUrl, '/embed.html', 200);
   assertSecurityHeaders(embed, 'runner');
@@ -206,7 +207,20 @@ async function main(baseUrl = defaultBaseUrl) {
   const shellVersion = runnerSource.match(
     /^const WEBGL_PREVIEW_VERSION = ["']([^"']+)["'];$/m
   )?.[1];
+  const buildVersion = runnerSource.match(
+    /^const WEBGL_PREVIEW_BUILD_VERSION = ["']([^"']+)["'];$/m
+  )?.[1];
   assert.ok(shellVersion, 'Preview Shell version must be declared');
+  assert.match(
+    buildVersion || '',
+    /^\d{4}\.(?:0[1-9]|1[0-2])\.(?:0[1-9]|[12]\d|3[01])-(?:[01]\d|2[0-3])[0-5]\d$/,
+    'final HTTP image must expose a precise Beijing build version'
+  );
+  assert.equal(
+    shellMarkup.split(`?v=${buildVersion}`).length - 1,
+    2,
+    'shell assets must use the injected build version as their cache key'
+  );
   assert.ok(
     compatibility.combinations?.some(
       (combination) =>

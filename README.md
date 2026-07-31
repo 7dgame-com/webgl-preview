@@ -74,6 +74,12 @@ version and generated Unity `buildId` appear together in
 `public/artifact-compatibility.json`; updating either side requires an explicit
 compatibility approval in that file.
 
+The user-facing version is separate from that compatibility identity. Release
+CI injects the Beijing build time in the same `vYYYY.MM.DD-HHmm` format used by
+the other platform plugins, and uses that value for the Shell asset cache keys.
+Local source keeps a placeholder and displays `vdev` rather than claiming a
+release time.
+
 The currently approved base is
 `hkccr.ccs.tencentyun.com/plugins/webgl-preview@sha256:1e03190d0b44ca204869461862859198a801edb3b4c1bf00e8ee5e8da1d9bfe5`.
 It is the `main` image for source revision `6906e15`; the older `publish`

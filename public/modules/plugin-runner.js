@@ -1,5 +1,8 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.08.01.3";
+const WEBGL_PREVIEW_VERSION = "2026.08.01.4";
+const WEBGL_PREVIEW_BUILD_VERSION = "__WEBGL_PREVIEW_BUILD_VERSION__";
+const WEBGL_PREVIEW_BUILD_VERSION_RE =
+  /^\d{4}\.(?:0[1-9]|1[0-2])\.(?:0[1-9]|[12]\d|3[01])-(?:[01]\d|2[0-3])[0-5]\d$/;
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
 const ASSET_PATH_RE =
@@ -1014,6 +1017,28 @@ class PreviewError extends Error {
     this.status = Number(options.status || 0);
     this.retryable = options.retryable !== false;
   }
+}
+
+function isPreviewBuildVersion(value) {
+  const normalized = String(value || "").trim();
+  if (!WEBGL_PREVIEW_BUILD_VERSION_RE.test(normalized)) return false;
+  const [year, month, day] = normalized
+    .slice(0, 10)
+    .split(".")
+    .map(Number);
+  const calendarDate = new Date(0);
+  calendarDate.setUTCHours(0, 0, 0, 0);
+  calendarDate.setUTCFullYear(year, month - 1, day);
+  return (
+    calendarDate.getUTCFullYear() === year &&
+    calendarDate.getUTCMonth() === month - 1 &&
+    calendarDate.getUTCDate() === day
+  );
+}
+
+function resolvePreviewBuildVersion(value = WEBGL_PREVIEW_BUILD_VERSION) {
+  const normalized = String(value || "").trim();
+  return isPreviewBuildVersion(normalized) ? normalized : "dev";
 }
 
 function normalizePositiveSceneId(value) {
@@ -2949,7 +2974,7 @@ async function init() {
   readInitialSceneId();
   state.handshakeSession = genId("handshake");
   if (elements.version) {
-    elements.version.textContent = `v${WEBGL_PREVIEW_VERSION}`;
+    elements.version.textContent = `v${resolvePreviewBuildVersion()}`;
   }
   setupControls();
   setupLocaleSync();

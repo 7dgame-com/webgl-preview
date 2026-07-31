@@ -31,6 +31,11 @@ const structureCheck = fs.readFileSync(
   path.join(root, 'scripts/structure-check.js'),
   'utf8'
 );
+const dockerfile = fs.readFileSync(path.join(root, 'Dockerfile'), 'utf8');
+const buildVersionInjector = fs.readFileSync(
+  path.join(root, 'scripts/inject-build-version.js'),
+  'utf8'
+);
 
 test('container smoke inspects final routes and every manifest artifact', () => {
   for (const route of [
@@ -131,14 +136,31 @@ test('publishing CI smokes the exact pushed digest and always cleans up', () => 
   );
   assert.match(
     workflow,
-    /container-gate:[\s\S]*needs: \[test, security-contract\]/
+    /container-gate:[\s\S]*needs: \[test, security-contract, build_metadata\]/
   );
   assert.match(workflow, /container-gate:[\s\S]*load: true[\s\S]*push: false/);
   assert.match(
     workflow,
-    /publish:[\s\S]*needs: \[test, security-contract, container-gate\]/
+    /publish:[\s\S]*needs: \[test, security-contract, build_metadata, container-gate\]/
   );
   assert.equal((workflow.match(/REQUIRE_APPROVED_BUILD=1/g) || []).length, 2);
+  assert.equal(
+    (workflow.match(/name: Generate Beijing build version/g) || []).length,
+    1
+  );
+  assert.equal(
+    (
+      workflow.match(
+        /WEBGL_PREVIEW_BUILD_VERSION=\$\{\{ needs\.build_metadata\.outputs\.build_version \}\}/g
+      ) || []
+    ).length,
+    2
+  );
+  assert.equal(
+    (workflow.match(/TZ=Asia\/Shanghai date '\+%Y\.%m\.%d-%H%M'/g) || [])
+      .length,
+    1
+  );
   assert.equal(
     (
       workflow.match(
@@ -166,4 +188,17 @@ test('publishing CI smokes the exact pushed digest and always cleans up', () => 
   assert.match(workflow, /trap cleanup EXIT/);
   assert.match(workflow, /provenance: mode=max/);
   assert.match(workflow, /sbom: true/);
+});
+
+test('release builds require and inject the visible build version', () => {
+  assert.match(dockerfile, /ARG WEBGL_PREVIEW_BUILD_VERSION=/);
+  assert.match(dockerfile, /AS shell-builder/);
+  assert.match(dockerfile, /inject-build-version\.js[\s\S]*?--require/);
+  assert.match(dockerfile, /inject-build-version\.js --root public --verify/);
+  assert.match(
+    dockerfile,
+    /COPY --from=shell-builder \/work\/public \/usr\/share\/nginx\/html/
+  );
+  assert.match(buildVersionInjector, /YYYY\.MM\.DD-HHmm/);
+  assert.match(buildVersionInjector, /expectedMarkers/);
 });

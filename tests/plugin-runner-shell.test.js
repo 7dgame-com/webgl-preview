@@ -56,6 +56,20 @@ function loadLifecycleContract() {
   )(lifecycleState, lifecycleDocument, lifecycleElements);
 }
 
+function loadBuildVersionContract() {
+  const constants = sourceBetween(
+    'const WEBGL_PREVIEW_BUILD_VERSION',
+    'const UNITY_PREVIEW_VERSE_EXPAND'
+  );
+  const functions = sourceBetween(
+    'function isPreviewBuildVersion',
+    'function normalizePositiveSceneId'
+  );
+  return new Function(
+    `${constants}\n${functions}\nreturn { resolvePreviewBuildVersion };`
+  )();
+}
+
 function loadPlatformRequest(
   fetchImpl,
   { timeoutMs = 1000, backoffMs = 0, refreshToken = async () => '' } = {}
@@ -153,6 +167,28 @@ test('scene ids normalize to safe positive integers only', () => {
   for (const invalid of ['', '0', '-1', '1.5', '1e3', ' 1 2 ', Number.MAX_VALUE]) {
     assert.equal(normalizePositiveSceneId(invalid), null);
   }
+});
+
+test('visible version uses the shared precise Beijing build-time format', () => {
+  const { resolvePreviewBuildVersion } = loadBuildVersionContract();
+  assert.equal(
+    resolvePreviewBuildVersion('2026.08.01-0637'),
+    '2026.08.01-0637'
+  );
+  assert.equal(
+    resolvePreviewBuildVersion('__WEBGL_PREVIEW_BUILD_VERSION__'),
+    'dev'
+  );
+  assert.equal(resolvePreviewBuildVersion('2026.02.31-1200'), 'dev');
+  assert.equal(
+    (html.match(/__WEBGL_PREVIEW_BUILD_VERSION__/g) || []).length,
+    2
+  );
+  assert.match(
+    source,
+    /elements\.version\.textContent = `v\$\{resolvePreviewBuildVersion\(\)\}`/
+  );
+  assert.match(source, /frameUrl\.searchParams\.set\("v", WEBGL_PREVIEW_VERSION\)/);
 });
 
 test('My Scenes is the default accessible production interaction', () => {
