@@ -9,7 +9,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=proxy
-      - traefik.http.routers.webgl-preview-d.rule=Host(`webgl-preview.d.plugins.xrugc.com`)
+      - traefik.http.routers.webgl-preview-d.rule=Host(`webgl-preview-d.plugins.xrugc.com`)
       - traefik.http.routers.webgl-preview-d.entrypoints=websecure
       - traefik.http.routers.webgl-preview-d.middlewares=test-compress@file
       - traefik.http.routers.webgl-preview-d.tls=true

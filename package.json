@@ -7,14 +7,24 @@
     "start": "node scripts/dev-server.js",
     "dev": "node scripts/dev-server.js",
     "build": "npm run self-check",
+    "build:manifest": "node scripts/build-manifest.js generate --root public --output public/build-manifest.json --allow-lfs-metadata",
     "preview": "node scripts/dev-server.js",
     "lint": "npm run self-check && npm run structure-check",
     "self-check": "node scripts/self-check.js",
     "structure-check": "node scripts/structure-check.js",
+    "check:base-image": "node scripts/check-base-image.js",
+    "check:artifact-compatibility": "node scripts/check-artifact-compatibility.js --root public",
+    "verify:build": "node scripts/build-manifest.js verify --root public --manifest public/build-manifest.json",
+    "verify:build:source": "node scripts/build-manifest.js verify --root public --manifest public/build-manifest.json --allow-lfs-metadata",
+    "test:unit": "node --test tests/*.test.js",
+    "test:security": "node --test tests/network-boundary.test.js tests/proxy-negative-matrix.test.js tests/plugin-runner-shell.test.js tests/plugin-runner-runtime.test.js tests/embed-contract.test.js tests/service-worker-contract.test.js tests/service-worker-runtime.test.js",
     "test:self-check": "npm run self-check",
-    "test:docker": "docker compose run --rm --no-deps webgl-preview wget -qO- http://127.0.0.1/api/health",
+    "test:docker": "node scripts/docker-smoke.js",
+    "test:container-smoke": "node scripts/container-smoke.js",
+    "test:subpath-container-smoke": "node scripts/subpath-container-smoke.js",
+    "test:browser-smoke": "node --experimental-websocket scripts/browser-smoke.js",
     "docker:build": "docker build -t webgl-preview:local .",
-    "test": "npm run self-check && npm run structure-check"
+    "test": "npm run self-check && npm run structure-check && npm run test:unit"
   },
   "engines": {
     "node": ">=20.0.0"
