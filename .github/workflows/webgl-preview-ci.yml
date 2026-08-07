@@ -20,11 +20,14 @@ on:
 env:
   TENCENT_REGISTRY: hkccr.ccs.tencentyun.com
   TENCENT_IMAGE_NAME: plugins/webgl-preview
+  WEBGL_PREVIEW_BASE_IMAGE: ${{ vars.WEBGL_PREVIEW_BASE_IMAGE || 'hkccr.ccs.tencentyun.com/plugins/webgl-preview@sha256:1e03190d0b44ca204869461862859198a801edb3b4c1bf00e8ee5e8da1d9bfe5' }}
 
 jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -40,10 +43,107 @@ jobs:
       - name: Run tests
         run: npm test
 
-  build:
-    name: Build and Push Image
+  security-contract:
+    name: Security Contracts
     runs-on: ubuntu-latest
-    needs: test
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run security regression gate
+        run: npm run test:security
+
+  build_metadata:
+    name: Generate Build Metadata
+    runs-on: ubuntu-latest
+    needs: [test, security-contract]
+    permissions:
+      contents: read
+    outputs:
+      build_version: ${{ steps.build-version.outputs.value }}
+    steps:
+      - name: Generate Beijing build version
+        id: build-version
+        run: |
+          printf 'value=%s\n' "$(TZ=Asia/Shanghai date '+%Y.%m.%d-%H%M')" >> "${GITHUB_OUTPUT}"
+
+  container-gate:
+    name: Build and Smoke Candidate
+    runs-on: ubuntu-latest
+    needs: [test, security-contract, build_metadata]
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up Node.js for delivery gate
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+
+      - name: Require immutable Unity base image
+        run: node scripts/check-base-image.js --require-digest
+
+      - name: Login to Tencent Cloud Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.TENCENT_REGISTRY }}
+          username: ${{ secrets.TENCENT_REGISTRY_USER }}
+          password: ${{ secrets.TENCENT_REGISTRY_PASSWORD }}
+
+      - name: Build local candidate without publishing tags
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          load: true
+          push: false
+          build-args: |
+            WEBGL_PREVIEW_BASE_IMAGE=${{ env.WEBGL_PREVIEW_BASE_IMAGE }}
+            WEBGL_PREVIEW_BUILD_VERSION=${{ needs.build_metadata.outputs.build_version }}
+            REQUIRE_PINNED_BASE_IMAGE=1
+            REQUIRE_APPROVED_BUILD=1
+          tags: webgl-preview:ci-${{ github.run_id }}-${{ github.run_attempt }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
+
+      - name: Smoke candidate before any release tag is published
+        env:
+          IMAGE_REF: webgl-preview:ci-${{ github.run_id }}-${{ github.run_attempt }}
+          CONTAINER_NAME: webgl-preview-gate-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          cleanup() {
+            docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+            docker image rm "${IMAGE_REF}" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          docker run --detach --name "${CONTAINER_NAME}" --env HOST_API_BASE=https://127.0.0.1:9 --publish 127.0.0.1:3006:80 "${IMAGE_REF}"
+          node scripts/container-smoke.js http://127.0.0.1:3006
+          node scripts/subpath-container-smoke.js http://127.0.0.1:3006
+          node --experimental-websocket scripts/browser-smoke.js http://127.0.0.1:3006
+
+  publish:
+    name: Publish Verified Image
+    runs-on: ubuntu-latest
+    needs: [test, security-contract, build_metadata, container-gate]
     if: github.event_name != 'pull_request'
     permissions:
       contents: read
@@ -53,6 +153,14 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Set up Node.js for delivery gates
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+
+      - name: Require immutable Unity base image
+        run: node scripts/check-base-image.js --require-digest
 
       - name: Login to Tencent Cloud Container Registry
         uses: docker/login-action@v3
@@ -81,12 +189,36 @@ jobs:
             type=raw,value=${{ github.event.inputs.image_tag }},enable=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.image_tag != '' }}
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
           push: true
+          build-args: |
+            WEBGL_PREVIEW_BASE_IMAGE=${{ env.WEBGL_PREVIEW_BASE_IMAGE }}
+            WEBGL_PREVIEW_BUILD_VERSION=${{ needs.build_metadata.outputs.build_version }}
+            REQUIRE_PINNED_BASE_IMAGE=1
+            REQUIRE_APPROVED_BUILD=1
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
+
+      - name: Smoke the pushed immutable image
+        env:
+          IMAGE_REF: ${{ env.TENCENT_REGISTRY }}/${{ env.TENCENT_IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          CONTAINER_NAME: webgl-preview-ci-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          cleanup() {
+            docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          docker pull "${IMAGE_REF}"
+          docker run --detach --name "${CONTAINER_NAME}" --env HOST_API_BASE=https://127.0.0.1:9 --publish 127.0.0.1:3006:80 "${IMAGE_REF}"
+          node scripts/container-smoke.js http://127.0.0.1:3006
+          node scripts/subpath-container-smoke.js http://127.0.0.1:3006
+          node --experimental-websocket scripts/browser-smoke.js http://127.0.0.1:3006

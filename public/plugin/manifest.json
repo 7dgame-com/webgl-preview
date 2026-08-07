@@ -4,8 +4,8 @@
   "version": "1.0.0",
   "type": "frontend",
   "entry": {
-    "frontend": "/index.html",
-    "runner": "/embed.html"
+    "frontend": "./index.html",
+    "runner": "./embed.html"
   },
   "permissions": [],
   "scopes": [
@@ -14,7 +14,7 @@
   "ui": {
     "mode": "iframe",
     "title": "WebGL Scene Runner",
-    "description": "Enter a scene id and run the corresponding XRUGC scene in Unity WebGL."
+    "description": "Select one of your XRUGC scenes and run it in Unity WebGL."
   },
   "inputSchema": {
     "type": "object",

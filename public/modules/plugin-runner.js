@@ -1,17 +1,85 @@
 const PLUGIN_ID = "webgl-preview";
-const WEBGL_PREVIEW_VERSION = "2026.05.21.13";
+const WEBGL_PREVIEW_VERSION = "2026.08.01.4";
+const WEBGL_PREVIEW_BUILD_VERSION = "__WEBGL_PREVIEW_BUILD_VERSION__";
+const WEBGL_PREVIEW_BUILD_VERSION_RE =
+  /^\d{4}\.(?:0[1-9]|1[0-2])\.(?:0[1-9]|[12]\d|3[01])-(?:[01]\d|2[0-3])[0-5]\d$/;
 const UNITY_PREVIEW_VERSE_EXPAND =
   "id,name,description,data,metas,metas.code,metas.metaCode,resources,code,uuid,verseCode";
-const SNAPSHOT_EXPAND =
-  "id,name,description,data,metas,resources,code,uuid,image,managers,verse_id";
-const DEFAULT_SNAPSHOT_URL = "https://a2.bujiaban.com/v1/server/snapshot";
-const LEGACY_COS_HOST =
-  "7dgame-public-1251022382.cos.ap-nanjing.myqcloud.com";
-const CDN_HOST = "data.7dgame.com";
 const ASSET_PATH_RE =
   /\.(?:png|jpe?g|gif|webp|bmp|svg|mp3|wav|ogg|m4a|mp4|webm|glb|gltf|fbx|obj|vox)(?:[?#]|$)/i;
 const VIDEO_PATH_RE = /\.(?:mp4|webm)(?:[?#]|$)/i;
-const LOCAL_TOKEN_STORAGE_KEY = "xrugc.webglPreview.token";
+const SCENE_PAGE_SIZE = 20;
+const SCENE_SEARCH_DEBOUNCE_MS = 300;
+const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
+const DEFAULT_HANDSHAKE_TIMEOUT_MS = 15000;
+const DEFAULT_DISPOSE_TIMEOUT_MS = 4000;
+const DEFAULT_UNITY_LOADER_TIMEOUT_MS = 600000;
+const TOKEN_REFRESH_TIMEOUT_MS = 15000;
+const PLATFORM_GET_MAX_ATTEMPTS = 2;
+const PLATFORM_GET_RETRY_DELAY_MS = 250;
+const RETRYABLE_PLATFORM_STATUSES = new Set([502, 503, 504]);
+const PREVIEW_LIFECYCLE = Object.freeze({
+  HANDSHAKE: "handshake",
+  SCENE_LIST: "scene-list",
+  READY: "ready",
+  LOADING_SCENE: "loading-scene",
+  STARTING_RUNNER: "starting-runner",
+  RUNNING: "running",
+  STOPPING: "stopping",
+  STOPPED: "stopped",
+  TERMINAL_ERROR: "terminal-error",
+});
+const LIFECYCLE_TRANSITIONS = Object.freeze({
+  [PREVIEW_LIFECYCLE.HANDSHAKE]: [
+    PREVIEW_LIFECYCLE.SCENE_LIST,
+    PREVIEW_LIFECYCLE.READY,
+    PREVIEW_LIFECYCLE.STOPPING,
+    PREVIEW_LIFECYCLE.TERMINAL_ERROR,
+  ],
+  [PREVIEW_LIFECYCLE.SCENE_LIST]: [
+    PREVIEW_LIFECYCLE.READY,
+    PREVIEW_LIFECYCLE.LOADING_SCENE,
+    PREVIEW_LIFECYCLE.STOPPING,
+    PREVIEW_LIFECYCLE.HANDSHAKE,
+    PREVIEW_LIFECYCLE.TERMINAL_ERROR,
+  ],
+  [PREVIEW_LIFECYCLE.READY]: [
+    PREVIEW_LIFECYCLE.SCENE_LIST,
+    PREVIEW_LIFECYCLE.LOADING_SCENE,
+    PREVIEW_LIFECYCLE.STOPPING,
+    PREVIEW_LIFECYCLE.HANDSHAKE,
+    PREVIEW_LIFECYCLE.TERMINAL_ERROR,
+  ],
+  [PREVIEW_LIFECYCLE.LOADING_SCENE]: [
+    PREVIEW_LIFECYCLE.STARTING_RUNNER,
+    PREVIEW_LIFECYCLE.STOPPING,
+    PREVIEW_LIFECYCLE.SCENE_LIST,
+    PREVIEW_LIFECYCLE.TERMINAL_ERROR,
+  ],
+  [PREVIEW_LIFECYCLE.STARTING_RUNNER]: [
+    PREVIEW_LIFECYCLE.RUNNING,
+    PREVIEW_LIFECYCLE.STOPPING,
+    PREVIEW_LIFECYCLE.TERMINAL_ERROR,
+  ],
+  [PREVIEW_LIFECYCLE.RUNNING]: [
+    PREVIEW_LIFECYCLE.STOPPING,
+    PREVIEW_LIFECYCLE.TERMINAL_ERROR,
+  ],
+  [PREVIEW_LIFECYCLE.STOPPING]: [
+    PREVIEW_LIFECYCLE.STOPPED,
+    PREVIEW_LIFECYCLE.HANDSHAKE,
+    PREVIEW_LIFECYCLE.TERMINAL_ERROR,
+  ],
+  [PREVIEW_LIFECYCLE.STOPPED]: [
+    PREVIEW_LIFECYCLE.READY,
+    PREVIEW_LIFECYCLE.SCENE_LIST,
+    PREVIEW_LIFECYCLE.LOADING_SCENE,
+    PREVIEW_LIFECYCLE.STOPPING,
+    PREVIEW_LIFECYCLE.HANDSHAKE,
+    PREVIEW_LIFECYCLE.TERMINAL_ERROR,
+  ],
+  [PREVIEW_LIFECYCLE.TERMINAL_ERROR]: [],
+});
 
 const I18N = {
   zh: {
@@ -20,6 +88,36 @@ const I18N = {
     fullscreenPreview: "全屏预览",
     sceneIdLabel: "场景号",
     sceneIdPlaceholder: "请输入场景号：例如1416",
+    myScenesLabel: "我的场景",
+    openMyScenes: "打开我的场景",
+    searchScenes: "搜索我的场景",
+    selectScene: "请选择一个场景",
+    awaitingHost: "正在等待平台登录信息…",
+    loadingScenes: "正在加载我的场景…",
+    noScenes: "你还没有可预览的场景。",
+    noSearchResults: "没有找到匹配的场景，请更换关键词。",
+    loginExpired: "登录状态已失效，请重新登录或等待平台刷新。",
+    previewForbidden: "当前账号无权使用场景预览。",
+    sceneListError: "我的场景加载失败，请重试。",
+    retry: "重试",
+    previousPage: "上一页",
+    nextPage: "下一页",
+    pageStatus: "第 {page} / {pages} 页，共 {total} 个",
+    sceneOptionMeta: "场景 #{id}{updated}",
+    sceneUpdated: " · 更新于 {date}",
+    unnamedScene: "未命名场景",
+    manualMode: "高级兼容模式",
+    manualHelp: "手填场景号仍会经过平台权限校验，不会绕过场景授权。",
+    manualSceneIdPlaceholder: "请输入正整数场景号",
+    developmentTokenLabel: "本地开发 Token",
+    developmentTokenWarning: "仅用于本地开发。Token 只保存在当前页面内存中。",
+    useToken: "仅本次使用",
+    returnToScenes: "返回场景选择",
+    sceneDataUnauthorized: "登录状态已失效，无法读取场景。",
+    sceneDataForbidden: "你没有权限预览这个场景。",
+    sceneDataNotFound: "场景不存在或当前账号不可见。",
+    sceneDataFailed: "场景数据读取失败，请稍后重试。",
+    handshakeFailed: "无法建立可信的平台连接。",
     run: "运行",
     stop: "停止",
     rerun: "重跑",
@@ -63,8 +161,8 @@ const I18N = {
     runnerReady: "Unity runner 已就绪。",
     runnerAccepted: "Unity runner 已接收场景。",
     cacheFailed: "插件缓存失败，将继续尝试直接加载。",
-    tokenSaved: "本地访问令牌已保存。",
-    tokenCleared: "本地访问令牌已清空。",
+    tokenSaved: "本地开发 Token 已在本次页面中启用。",
+    tokenCleared: "本地开发 Token 已从内存清空。",
     opened: "WebGL 场景运行器已打开。",
   },
   "zh-TW": {
@@ -73,6 +171,36 @@ const I18N = {
     fullscreenPreview: "全螢幕預覽",
     sceneIdLabel: "場景號",
     sceneIdPlaceholder: "請輸入場景號：例如1416",
+    myScenesLabel: "我的場景",
+    openMyScenes: "開啟我的場景",
+    searchScenes: "搜尋我的場景",
+    selectScene: "請選擇一個場景",
+    awaitingHost: "正在等待平台登入資訊…",
+    loadingScenes: "正在載入我的場景…",
+    noScenes: "你還沒有可預覽的場景。",
+    noSearchResults: "找不到符合的場景，請更換關鍵字。",
+    loginExpired: "登入狀態已失效，請重新登入或等待平台更新。",
+    previewForbidden: "目前帳號無權使用場景預覽。",
+    sceneListError: "我的場景載入失敗，請重試。",
+    retry: "重試",
+    previousPage: "上一頁",
+    nextPage: "下一頁",
+    pageStatus: "第 {page} / {pages} 頁，共 {total} 個",
+    sceneOptionMeta: "場景 #{id}{updated}",
+    sceneUpdated: " · 更新於 {date}",
+    unnamedScene: "未命名場景",
+    manualMode: "進階相容模式",
+    manualHelp: "手填場景號仍會經過平台權限驗證，不會繞過場景授權。",
+    manualSceneIdPlaceholder: "請輸入正整數場景號",
+    developmentTokenLabel: "本機開發 Token",
+    developmentTokenWarning: "僅供本機開發。Token 只保存在目前頁面的記憶體中。",
+    useToken: "僅本次使用",
+    returnToScenes: "返回場景選擇",
+    sceneDataUnauthorized: "登入狀態已失效，無法讀取場景。",
+    sceneDataForbidden: "你沒有權限預覽這個場景。",
+    sceneDataNotFound: "場景不存在或目前帳號不可見。",
+    sceneDataFailed: "場景資料讀取失敗，請稍後重試。",
+    handshakeFailed: "無法建立可信的平台連線。",
     run: "運行",
     stop: "停止",
     rerun: "重跑",
@@ -116,8 +244,8 @@ const I18N = {
     runnerReady: "Unity runner 已就緒。",
     runnerAccepted: "Unity runner 已接收場景。",
     cacheFailed: "插件快取失敗，將繼續嘗試直接載入。",
-    tokenSaved: "本機存取權杖已儲存。",
-    tokenCleared: "本機存取權杖已清空。",
+    tokenSaved: "本機開發 Token 已在本頁啟用。",
+    tokenCleared: "本機開發 Token 已從記憶體清除。",
     opened: "WebGL 場景運行器已開啟。",
   },
   en: {
@@ -126,6 +254,36 @@ const I18N = {
     fullscreenPreview: "Fullscreen preview",
     sceneIdLabel: "Scene ID",
     sceneIdPlaceholder: "Enter scene ID: e.g. 1416",
+    myScenesLabel: "My scenes",
+    openMyScenes: "Open My scenes",
+    searchScenes: "Search My scenes",
+    selectScene: "Select a scene",
+    awaitingHost: "Waiting for the platform session…",
+    loadingScenes: "Loading My scenes…",
+    noScenes: "You do not have any scenes to preview yet.",
+    noSearchResults: "No matching scenes. Try another search.",
+    loginExpired: "Your session has expired. Sign in again or wait for a refresh.",
+    previewForbidden: "This account cannot use scene preview.",
+    sceneListError: "My scenes could not be loaded. Try again.",
+    retry: "Retry",
+    previousPage: "Previous page",
+    nextPage: "Next page",
+    pageStatus: "Page {page} of {pages}, {total} total",
+    sceneOptionMeta: "Scene #{id}{updated}",
+    sceneUpdated: " · Updated {date}",
+    unnamedScene: "Untitled scene",
+    manualMode: "Advanced compatibility mode",
+    manualHelp: "A manually entered scene ID still uses platform authorization.",
+    manualSceneIdPlaceholder: "Enter a positive scene ID",
+    developmentTokenLabel: "Local development token",
+    developmentTokenWarning: "Local development only. The token stays in this page's memory.",
+    useToken: "Use once",
+    returnToScenes: "Back to scenes",
+    sceneDataUnauthorized: "Your session has expired, so the scene cannot be read.",
+    sceneDataForbidden: "You do not have permission to preview this scene.",
+    sceneDataNotFound: "The scene does not exist or is not visible to this account.",
+    sceneDataFailed: "Scene data could not be loaded. Try again later.",
+    handshakeFailed: "A trusted platform connection could not be established.",
     run: "Run",
     stop: "Stop",
     rerun: "Rerun",
@@ -169,8 +327,8 @@ const I18N = {
     runnerReady: "Unity runner is ready.",
     runnerAccepted: "Unity runner accepted the scene.",
     cacheFailed: "Plugin cache failed. Continuing with direct loading.",
-    tokenSaved: "Local access token saved.",
-    tokenCleared: "Local access token cleared.",
+    tokenSaved: "The local development token is active for this page only.",
+    tokenCleared: "The local development token was cleared from memory.",
     opened: "WebGL scene runner opened.",
   },
   ja: {
@@ -179,6 +337,36 @@ const I18N = {
     fullscreenPreview: "全画面プレビュー",
     sceneIdLabel: "シーン ID",
     sceneIdPlaceholder: "シーン ID を入力：例 1416",
+    myScenesLabel: "自分のシーン",
+    openMyScenes: "自分のシーンを開く",
+    searchScenes: "自分のシーンを検索",
+    selectScene: "シーンを選択してください",
+    awaitingHost: "プラットフォームのログイン情報を待っています…",
+    loadingScenes: "自分のシーンを読み込み中…",
+    noScenes: "プレビューできるシーンはまだありません。",
+    noSearchResults: "一致するシーンがありません。別のキーワードをお試しください。",
+    loginExpired: "ログインの有効期限が切れました。再ログインしてください。",
+    previewForbidden: "このアカウントにはシーンプレビュー権限がありません。",
+    sceneListError: "シーンを読み込めませんでした。再試行してください。",
+    retry: "再試行",
+    previousPage: "前のページ",
+    nextPage: "次のページ",
+    pageStatus: "{page} / {pages} ページ、全 {total} 件",
+    sceneOptionMeta: "シーン #{id}{updated}",
+    sceneUpdated: " · {date} 更新",
+    unnamedScene: "名称未設定のシーン",
+    manualMode: "高度な互換モード",
+    manualHelp: "手入力したシーン ID もプラットフォームの権限確認を通ります。",
+    manualSceneIdPlaceholder: "正の整数のシーン ID を入力",
+    developmentTokenLabel: "ローカル開発 Token",
+    developmentTokenWarning: "ローカル開発専用です。Token はこのページのメモリだけに保存されます。",
+    useToken: "今回のみ使用",
+    returnToScenes: "シーン選択に戻る",
+    sceneDataUnauthorized: "ログインの有効期限が切れたため、シーンを読み込めません。",
+    sceneDataForbidden: "このシーンをプレビューする権限がありません。",
+    sceneDataNotFound: "シーンが存在しないか、このアカウントには表示されません。",
+    sceneDataFailed: "シーンデータを読み込めませんでした。後でもう一度お試しください。",
+    handshakeFailed: "信頼できるプラットフォーム接続を確立できませんでした。",
     run: "実行",
     stop: "停止",
     rerun: "再実行",
@@ -222,8 +410,8 @@ const I18N = {
     runnerReady: "Unity runner の準備ができました。",
     runnerAccepted: "Unity runner がシーンを受信しました。",
     cacheFailed: "プラグインのキャッシュに失敗しました。直接読み込みを続行します。",
-    tokenSaved: "ローカルアクセストークンを保存しました。",
-    tokenCleared: "ローカルアクセストークンをクリアしました。",
+    tokenSaved: "ローカル開発 Token をこのページでのみ有効にしました。",
+    tokenCleared: "ローカル開発 Token をメモリから消去しました。",
     opened: "WebGL シーンランナーを開きました。",
   },
   th: {
@@ -232,6 +420,36 @@ const I18N = {
     fullscreenPreview: "ดูแบบเต็มหน้าจอ",
     sceneIdLabel: "รหัสฉาก",
     sceneIdPlaceholder: "กรอกรหัสฉาก เช่น 1416",
+    myScenesLabel: "ฉากของฉัน",
+    openMyScenes: "เปิดฉากของฉัน",
+    searchScenes: "ค้นหาฉากของฉัน",
+    selectScene: "เลือกฉาก",
+    awaitingHost: "กำลังรอข้อมูลเข้าสู่ระบบจากแพลตฟอร์ม…",
+    loadingScenes: "กำลังโหลดฉากของฉัน…",
+    noScenes: "คุณยังไม่มีฉากสำหรับแสดงตัวอย่าง",
+    noSearchResults: "ไม่พบฉากที่ตรงกัน ลองใช้คำค้นอื่น",
+    loginExpired: "สถานะเข้าสู่ระบบหมดอายุ โปรดเข้าสู่ระบบอีกครั้ง",
+    previewForbidden: "บัญชีนี้ไม่มีสิทธิ์ใช้ตัวอย่างฉาก",
+    sceneListError: "โหลดฉากของฉันไม่สำเร็จ โปรดลองอีกครั้ง",
+    retry: "ลองอีกครั้ง",
+    previousPage: "หน้าก่อนหน้า",
+    nextPage: "หน้าถัดไป",
+    pageStatus: "หน้า {page} / {pages} รวม {total} รายการ",
+    sceneOptionMeta: "ฉาก #{id}{updated}",
+    sceneUpdated: " · อัปเดต {date}",
+    unnamedScene: "ฉากไม่มีชื่อ",
+    manualMode: "โหมดความเข้ากันได้ขั้นสูง",
+    manualHelp: "รหัสฉากที่กรอกเองยังต้องผ่านการตรวจสอบสิทธิ์ของแพลตฟอร์ม",
+    manualSceneIdPlaceholder: "กรอกรหัสฉากจำนวนเต็มบวก",
+    developmentTokenLabel: "Token สำหรับพัฒนาในเครื่อง",
+    developmentTokenWarning: "ใช้สำหรับพัฒนาในเครื่องเท่านั้น Token จะอยู่ในหน่วยความจำของหน้านี้",
+    useToken: "ใช้ครั้งนี้เท่านั้น",
+    returnToScenes: "กลับไปเลือกฉาก",
+    sceneDataUnauthorized: "สถานะเข้าสู่ระบบหมดอายุ จึงอ่านฉากไม่ได้",
+    sceneDataForbidden: "คุณไม่มีสิทธิ์ดูตัวอย่างฉากนี้",
+    sceneDataNotFound: "ไม่มีฉากนี้หรือบัญชีนี้มองไม่เห็น",
+    sceneDataFailed: "อ่านข้อมูลฉากไม่สำเร็จ โปรดลองอีกครั้งภายหลัง",
+    handshakeFailed: "ไม่สามารถสร้างการเชื่อมต่อแพลตฟอร์มที่เชื่อถือได้",
     run: "รัน",
     stop: "หยุด",
     rerun: "รันใหม่",
@@ -275,15 +493,24 @@ const I18N = {
     runnerReady: "Unity runner พร้อมแล้ว",
     runnerAccepted: "Unity runner รับฉากแล้ว",
     cacheFailed: "แคชปลั๊กอินไม่สำเร็จ จะลองโหลดโดยตรงต่อไป",
-    tokenSaved: "บันทึก local access token แล้ว",
-    tokenCleared: "ล้าง local access token แล้ว",
+    tokenSaved: "เปิดใช้ Token สำหรับพัฒนาเฉพาะหน้านี้แล้ว",
+    tokenCleared: "ล้าง Token สำหรับพัฒนาออกจากหน่วยความจำแล้ว",
     opened: "เปิด WebGL scene runner แล้ว",
   },
 };
 
 const state = {
+  lifecycle: PREVIEW_LIFECYCLE.HANDSHAKE,
   token: "",
   config: {},
+  runtimeConfig: {},
+  handshakeSession: "",
+  handshakeComplete: false,
+  handshakeTimer: 0,
+  hostOrigin: "",
+  hostSource: null,
+  tokenRefreshWaiter: null,
+  identityGeneration: 0,
   payload: null,
   frameReady: false,
   pendingRun: false,
@@ -300,13 +527,46 @@ const state = {
   loadingProgressPercent: 0,
   loadingProgressMode: "plugin",
   frameSession: "",
+  frameOrigin: "",
+  runAbortController: null,
+  runTerminal: false,
+  disposeWaiter: null,
   runSerial: 0,
+  sceneListStatus: "awaiting-host",
+  scenes: [],
+  sceneSearch: "",
+  scenePage: 1,
+  scenePageCount: 1,
+  sceneTotalCount: 0,
+  scenePerPage: SCENE_PAGE_SIZE,
+  sceneListGeneration: 0,
+  sceneListController: null,
+  sceneSearchTimer: 0,
+  selectedSceneId: null,
+  selectedScene: null,
+  initialSceneId: null,
+  scenePickerOpen: false,
+  allowManualSceneId: false,
+  allowDevelopmentToken: false,
   locale: "zh",
 };
 
 const elements = {
   status: document.querySelector("[data-status]"),
   version: document.querySelector("[data-version]"),
+  sceneControls: document.querySelector("[data-scene-controls]"),
+  scenePicker: document.querySelector("[data-scene-picker]"),
+  sceneSearch: document.querySelector("[data-scene-search]"),
+  sceneToggle: document.querySelector("[data-scene-toggle]"),
+  scenePopover: document.querySelector("[data-scene-popover]"),
+  sceneListState: document.querySelector("[data-scene-list-state]"),
+  sceneOptions: document.querySelector("[data-scene-options]"),
+  sceneRetry: document.querySelector("[data-scene-retry]"),
+  scenePagination: document.querySelector("[data-scene-pagination]"),
+  scenePrevious: document.querySelector("[data-scene-previous]"),
+  sceneNext: document.querySelector("[data-scene-next]"),
+  scenePage: document.querySelector("[data-scene-page]"),
+  manualMode: document.querySelector("[data-manual-mode]"),
   sceneField: document.querySelector("[data-scene-field]"),
   sceneId: document.querySelector("[data-scene-id]"),
   run: document.querySelector("[data-run]"),
@@ -331,7 +591,35 @@ const elements = {
   loadingShield: document.querySelector("[data-loading-shield]"),
   loadingTitle: document.querySelector("[data-loading-title]"),
   loadingDetail: document.querySelector("[data-loading-detail]"),
+  developmentToken: document.querySelector("[data-development-token]"),
+  runError: document.querySelector("[data-run-error]"),
+  runErrorTitle: document.querySelector("[data-run-error-title]"),
+  runErrorCode: document.querySelector("[data-run-error-code]"),
+  runRetry: document.querySelector("[data-run-retry]"),
+  runReturn: document.querySelector("[data-run-return]"),
 };
+
+function canTransitionLifecycle(current, next, recoverTerminal = false) {
+  if (!Object.values(PREVIEW_LIFECYCLE).includes(next)) return false;
+  if (current === next) return true;
+  if (current === PREVIEW_LIFECYCLE.TERMINAL_ERROR) {
+    return recoverTerminal;
+  }
+  return (LIFECYCLE_TRANSITIONS[current] || []).includes(next);
+}
+
+function transitionLifecycle(
+  next,
+  { runSession = "", recoverTerminal = false } = {}
+) {
+  if (runSession && runSession !== state.frameSession) return false;
+  if (!canTransitionLifecycle(state.lifecycle, next, recoverTerminal)) return false;
+  state.lifecycle = next;
+  state.runTerminal = next === PREVIEW_LIFECYCLE.TERMINAL_ERROR;
+  document.documentElement.dataset.previewLifecycle = next;
+  if (elements.status) elements.status.dataset.lifecycle = next;
+  return true;
+}
 
 function normalizeLocale(value) {
   const lang = (value || navigator.language || "zh-CN")
@@ -375,6 +663,7 @@ function applyI18n() {
   if (elements.tokenState) {
     elements.tokenState.textContent = state.token ? t("configured") : t("notConfigured");
   }
+  renderScenePicker();
 }
 
 function currentLocaleCode() {
@@ -383,6 +672,20 @@ function currentLocaleCode() {
 }
 
 function refreshStatusForLocale() {
+  if (state.lifecycle === PREVIEW_LIFECYCLE.TERMINAL_ERROR) {
+    const key =
+      state.sceneListStatus === "401"
+        ? "loginExpired"
+        : state.sceneListStatus === "403"
+          ? "previewForbidden"
+          : state.sceneListStatus === "error"
+            ? "sceneListError"
+            : state.sceneListStatus === "handshake-error"
+              ? "handshakeFailed"
+              : "runFailed";
+    setStatus(t(key), "error");
+    return;
+  }
   if (state.sceneLoading) {
     setStatus(t("readingScene"), "busy");
     return;
@@ -403,7 +706,7 @@ function refreshStatusForLocale() {
     setStatus(t("loadingPlugin"), "busy");
     return;
   }
-  setStatus(t("enterSceneId"), "ready");
+  setStatus(t("selectScene"), "ready");
 }
 
 function extractLocaleCandidate(value) {
@@ -425,14 +728,20 @@ function extractLocaleCandidate(value) {
 }
 
 function postLocaleToUnityFrame() {
-  if (isUnityFrameStopped() || !elements.frame.contentWindow) return;
+  if (
+    isUnityFrameStopped() ||
+    !elements.frame.contentWindow ||
+    !state.frameOrigin ||
+    !state.frameSession
+  ) return;
   elements.frame.contentWindow.postMessage(
     {
       type: "webgl-preview-locale-change",
+      session: state.frameSession,
       lang: currentLocaleCode(),
       locale: currentLocaleCode(),
     },
-    "*"
+    state.frameOrigin
   );
 }
 
@@ -501,13 +810,32 @@ function setRemoteLoadingShield(message) {
 }
 
 function genId(prefix) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  if (globalThis.crypto?.randomUUID) {
+    return `${prefix}-${globalThis.crypto.randomUUID()}`;
+  }
+  const entropy = new Uint32Array(4);
+  globalThis.crypto?.getRandomValues?.(entropy);
+  const random = [...entropy]
+    .map((value) => value.toString(16).padStart(8, "0"))
+    .join("");
+  return `${prefix}-${Date.now()}-${random}`;
 }
 
 function log(message, detail) {
   const timestamp = new Date().toLocaleTimeString();
   const suffix = detail ? `\n${JSON.stringify(detail, null, 2)}` : "";
   elements.log.textContent = `[${timestamp}] ${message}${suffix}\n\n${elements.log.textContent}`;
+}
+
+function safeResourceLabel(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  try {
+    const url = new URL(text, window.location.href);
+    return url.pathname.split("/").filter(Boolean).pop() || "resource";
+  } catch {
+    return text.split(/[?#]/, 1)[0].slice(0, 96);
+  }
 }
 
 function formatStatusText(text) {
@@ -622,17 +950,26 @@ function renderControls() {
   if (elements.loadingProgress) {
     elements.loadingProgress.hidden = !shouldShowLoadingProgress();
   }
-  elements.sceneField.hidden = isActive;
+  if (elements.sceneControls) {
+    elements.sceneControls.hidden = isActive;
+  }
+  if (elements.manualMode) {
+    elements.manualMode.hidden = isActive || !state.allowManualSceneId;
+  }
+  if (elements.developmentToken) {
+    elements.developmentToken.hidden = !state.allowDevelopmentToken;
+  }
   elements.run.hidden = isActive;
   elements.stop.hidden = !isActive;
   elements.reload.hidden = !isActive;
   elements.helpControl.hidden = !isActive;
-  elements.run.disabled = state.busy;
+  elements.run.disabled = state.busy || !normalizePositiveSceneId(state.selectedSceneId);
   elements.stop.disabled = state.busy && state.stopped;
   elements.reload.disabled = state.busy && !state.sceneResourceLoading;
 }
 
 function setLoadingShield(visible, detail, title, i18n) {
+  if (visible && state.lifecycle === PREVIEW_LIFECYCLE.TERMINAL_ERROR) return;
   elements.loadingShield.hidden = !visible;
   if (visible) {
     state.loadingI18n = normalizeLoadingI18n(i18n);
@@ -672,186 +1009,1071 @@ function readQuery() {
   return new URLSearchParams(window.location.search);
 }
 
+class PreviewError extends Error {
+  constructor(code, message, options = {}) {
+    super(message);
+    this.name = "PreviewError";
+    this.code = code;
+    this.status = Number(options.status || 0);
+    this.retryable = options.retryable !== false;
+  }
+}
+
+function isPreviewBuildVersion(value) {
+  const normalized = String(value || "").trim();
+  if (!WEBGL_PREVIEW_BUILD_VERSION_RE.test(normalized)) return false;
+  const [year, month, day] = normalized
+    .slice(0, 10)
+    .split(".")
+    .map(Number);
+  const calendarDate = new Date(0);
+  calendarDate.setUTCHours(0, 0, 0, 0);
+  calendarDate.setUTCFullYear(year, month - 1, day);
+  return (
+    calendarDate.getUTCFullYear() === year &&
+    calendarDate.getUTCMonth() === month - 1 &&
+    calendarDate.getUTCDate() === day
+  );
+}
+
+function resolvePreviewBuildVersion(value = WEBGL_PREVIEW_BUILD_VERSION) {
+  const normalized = String(value || "").trim();
+  return isPreviewBuildVersion(normalized) ? normalized : "dev";
+}
+
+function normalizePositiveSceneId(value) {
+  const text = String(value ?? "").trim();
+  if (!/^[1-9]\d*$/.test(text)) return null;
+  const sceneId = Number(text);
+  return Number.isSafeInteger(sceneId) ? sceneId : null;
+}
+
 function normalizeApiBase(value) {
   const input = (value || "").trim();
   if (!input) return "";
 
   try {
     const url = new URL(input, window.location.href);
+    url.hash = "";
+    url.search = "";
     return url.toString().replace(/\/+$/, "");
-  } catch {
-    return input.replace(/\/+$/, "");
-  }
-}
-
-function resolveParentApiBase() {
-  try {
-    if (document.referrer) {
-      return new URL("/api", document.referrer).toString().replace(/\/+$/, "");
-    }
-  } catch {
-    // Ignore invalid referrers.
-  }
-
-  return "";
-}
-
-function resolveApiBase() {
-  const query = readQuery();
-  return normalizeApiBase(
-    state.config.snapshotUrl ||
-      state.config.snapshotApi ||
-      query.get("snapshot") ||
-      query.get("snapshotApi") ||
-      (query.get("source") === "legacy" || query.get("legacy") === "1"
-        ? ""
-        : DEFAULT_SNAPSHOT_URL) ||
-      state.config.apiBase ||
-      state.config.api ||
-      query.get("api") ||
-      resolveParentApiBase() ||
-      "https://d.dev.xrugc.com/api"
-  );
-}
-
-function resolveLegacyApiBase() {
-  const query = readQuery();
-  return normalizeApiBase(
-    state.config.apiBase ||
-      state.config.api ||
-      query.get("api") ||
-      resolveParentApiBase() ||
-      "https://d.dev.xrugc.com/api"
-  );
-}
-
-function shouldUseDirectCdnAssets() {
-  const query = readQuery();
-  const value =
-    state.config.directCdn ||
-    state.config.directCdnAssets ||
-    state.config.assetMode ||
-    query.get("directCdn") ||
-    query.get("directCdnAssets") ||
-    query.get("assetMode");
-  return /^(1|true|direct|cdn)$/i.test(String(value || ""));
-}
-
-function shouldUseLegacyVerseApi() {
-  const query = readQuery();
-  return query.get("source") === "legacy" || query.get("legacy") === "1";
-}
-
-function resolveSnapshotUrl(sceneId) {
-  const url = new URL(resolveApiBase(), window.location.href);
-  url.searchParams.set("expand", SNAPSHOT_EXPAND);
-  url.searchParams.set("verse_id", String(sceneId));
-  return url.toString();
-}
-
-function readStoredToken() {
-  try {
-    return localStorage.getItem(LOCAL_TOKEN_STORAGE_KEY) || "";
   } catch {
     return "";
   }
 }
 
-function writeStoredToken(token) {
+function normalizeOrigin(value) {
+  if (value === "self") return window.location.origin;
   try {
-    if (token) {
-      localStorage.setItem(LOCAL_TOKEN_STORAGE_KEY, token);
-    } else {
-      localStorage.removeItem(LOCAL_TOKEN_STORAGE_KEY);
-    }
+    const url = new URL(String(value || ""), window.location.href);
+    if (url.username || url.password) return "";
+    return url.origin === "null" ? "" : url.origin;
   } catch {
-    // Local storage can be disabled in restricted browser contexts.
+    return "";
   }
 }
 
-function setToken(token, options = {}) {
-  const value = (token || "").trim();
-  state.token = value;
-  if (elements.tokenInput) {
-    elements.tokenInput.value = value;
+function normalizeOriginList(value) {
+  if (!Array.isArray(value)) return [];
+  return [
+    ...new Set(
+      value
+        .map((candidate) => {
+          if (candidate === "self") return window.location.origin;
+          const input = String(candidate || "").trim();
+          if (!input) return "";
+          try {
+            const url = new URL(input);
+            return (
+              (url.protocol === "https:" || url.protocol === "http:") &&
+              url.origin === input
+            )
+              ? url.origin
+              : "";
+          } catch {
+            return "";
+          }
+        })
+        .filter(Boolean)
+    ),
+  ];
+}
+
+function isLoopbackHost(hostname) {
+  const host = String(hostname || "").toLowerCase().replace(/^\[|\]$/g, "");
+  return host === "localhost" || host === "::1" || /^127(?:\.\d{1,3}){3}$/.test(host);
+}
+
+function isExplicitLocalDevelopment() {
+  const explicit =
+    readQuery().get("dev") === "1" ||
+    state.runtimeConfig.localDevelopment === true ||
+    state.runtimeConfig.development === true;
+  return explicit && isLoopbackHost(window.location.hostname);
+}
+
+function getRequestTimeoutMs() {
+  const configured = Number(state.runtimeConfig.requestTimeoutMs);
+  return Number.isFinite(configured) && configured >= 1000
+    ? Math.min(configured, 60000)
+    : DEFAULT_REQUEST_TIMEOUT_MS;
+}
+
+function getHandshakeTimeoutMs() {
+  const configured = Number(state.runtimeConfig.handshakeTimeoutMs);
+  return Number.isFinite(configured) && configured >= 1000
+    ? Math.min(configured, 60000)
+    : DEFAULT_HANDSHAKE_TIMEOUT_MS;
+}
+
+function getDisposeTimeoutMs() {
+  const configured = Number(state.runtimeConfig.disposeTimeoutMs);
+  return Number.isFinite(configured) && configured >= 500
+    ? Math.min(configured, 15000)
+    : DEFAULT_DISPOSE_TIMEOUT_MS;
+}
+
+function getUnityLoaderTimeoutMs() {
+  const configured = Number(state.runtimeConfig.unityLoaderTimeoutMs);
+  return Number.isFinite(configured) && configured >= 1000
+    ? Math.min(configured, 900000)
+    : DEFAULT_UNITY_LOADER_TIMEOUT_MS;
+}
+
+function getMaxDevicePixelRatio() {
+  const configured = Number(state.runtimeConfig.maxDevicePixelRatio);
+  return Number.isFinite(configured) && configured > 0
+    ? Math.min(Math.max(configured, 1), 3)
+    : 2;
+}
+
+async function loadRuntimeConfig() {
+  const configUrl = new URL("./runtime-config.json", document.baseURI);
+  const response = await fetch(configUrl.toString(), {
+    method: "GET",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new PreviewError(
+      "WGP-CONFIG",
+      `Runtime config unavailable (${response.status})`,
+      { status: response.status, retryable: false }
+    );
   }
-  if (elements.tokenState) {
-    elements.tokenState.textContent = value ? t("configured") : t("notConfigured");
+  const config = await response.json();
+  if (!isRecord(config)) {
+    throw new PreviewError("WGP-CONFIG", "Runtime config must be an object", {
+      retryable: false,
+    });
   }
-  if (options.persist) {
-    writeStoredToken(value);
+  state.runtimeConfig = config;
+  state.allowManualSceneId =
+    config.allowManualSceneId === true || isExplicitLocalDevelopment();
+  state.allowDevelopmentToken =
+    isExplicitLocalDevelopment() && config.allowDevelopmentToken === true;
+}
+
+function allowedPlatformApiOrigins() {
+  return normalizeOriginList(state.runtimeConfig.platformApiOrigins);
+}
+
+function allowedAssetOrigins() {
+  return normalizeOriginList(state.runtimeConfig.assetOrigins);
+}
+
+function isAllowedSecureOrigin(url, allowedOrigins) {
+  if (url.username || url.password) return false;
+  if (!allowedOrigins.includes(url.origin)) return false;
+  if (url.protocol === "https:") return true;
+  return isExplicitLocalDevelopment() && url.protocol === "http:" && isLoopbackHost(url.hostname);
+}
+
+function resolvePlatformApiAlias() {
+  const candidate = state.runtimeConfig.platformApiAlias;
+  if (typeof candidate !== "string" || !candidate.trim()) return "";
+
+  try {
+    const url = new URL(candidate.trim(), window.location.href);
+    if (
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash ||
+      url.origin !== window.location.origin ||
+      (url.protocol !== "https:" &&
+        !(isExplicitLocalDevelopment() && url.protocol === "http:"))
+    ) {
+      return "";
+    }
+    const pathname = url.pathname.replace(/\/+$/, "");
+    if (!pathname || pathname === "/" || pathname.split("/").includes("..")) {
+      return "";
+    }
+    url.pathname = pathname;
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return "";
   }
 }
 
-function initLocalToken() {
-  const query = readQuery();
-  const queryToken = query.get("token") || query.get("access_token") || "";
-  setToken(queryToken || readStoredToken());
+function isAllowedPlatformRequestUrl(url) {
+  const aliasBase = resolvePlatformApiAlias();
+  if (aliasBase) {
+    const alias = new URL(`${aliasBase}/`);
+    if (url.origin === alias.origin) {
+      const listPath = `${alias.pathname.replace(/\/+$/, "")}/v1/verses`;
+      if (url.pathname === listPath) return true;
+      if (url.pathname.startsWith(`${listPath}/`)) {
+        return /^[1-9]\d*$/.test(url.pathname.slice(listPath.length + 1));
+      }
+      return false;
+    }
+  }
+  return isAllowedSecureOrigin(url, allowedPlatformApiOrigins());
+}
+
+function resolveApiBase() {
+  const aliasBase = resolvePlatformApiAlias();
+  if (aliasBase) return aliasBase;
+
+  const candidates = [
+    state.config.platformApiBase,
+    state.config.apiBase,
+    state.config.api,
+    state.runtimeConfig.platformApiBase,
+    state.runtimeConfig.apiBase,
+    isExplicitLocalDevelopment() ? state.runtimeConfig.standaloneApiBase : "",
+  ];
+  const allowedOrigins = allowedPlatformApiOrigins();
+
+  for (const candidate of candidates) {
+    const normalized = normalizeApiBase(candidate);
+    if (!normalized) continue;
+    const url = new URL(normalized);
+    if (isAllowedSecureOrigin(url, allowedOrigins)) return normalized;
+  }
+
+  if (allowedOrigins.length === 1) {
+    return `${allowedOrigins[0]}/api`;
+  }
+
+  return "";
+}
+
+function resolvePlatformUrl(pathname) {
+  const apiBase = resolveApiBase();
+  if (!apiBase) {
+    throw new PreviewError(
+      "WGP-API-ORIGIN",
+      "Platform API base is missing or not allowlisted",
+      { retryable: false }
+    );
+  }
+  const base = new URL(`${apiBase.replace(/\/+$/, "")}/`);
+  const resolved = new URL(String(pathname).replace(/^\/+/, ""), base);
+  if (!isAllowedPlatformRequestUrl(resolved)) {
+    throw new PreviewError("WGP-API-ORIGIN", "Platform API origin denied", {
+      retryable: false,
+    });
+  }
+  return resolved;
 }
 
 function resolveAssetBaseOrigin() {
+  const configured = state.runtimeConfig.assetBaseOrigin;
+  if (configured) {
+    try {
+      const url = new URL(configured);
+      if (isAllowedSecureOrigin(url, allowedAssetOrigins())) return url.origin;
+    } catch {
+      // Fall through to the first declared asset origin.
+    }
+  }
+  return allowedAssetOrigins()[0] || "";
+}
+
+function resolveTrustedHostOrigin() {
+  const allowed = normalizeOriginList(state.runtimeConfig.trustedHostOrigins);
+  const candidates = [];
+  if (document.referrer) candidates.push(normalizeOrigin(document.referrer));
   try {
-    const apiBase = new URL(resolveApiBase());
-    return `${apiBase.protocol}//${apiBase.host}`;
+    if (window.location.ancestorOrigins?.length) {
+      candidates.push(normalizeOrigin(window.location.ancestorOrigins[0]));
+    }
   } catch {
-    return "https://d.dev.xrugc.com";
+    // ancestorOrigins is optional and may be unavailable.
+  }
+  if (window.parent !== window) candidates.push(window.location.origin);
+  const match = candidates.find((origin) => origin && allowed.includes(origin));
+  if (match) return match;
+  return allowed.length === 1 ? allowed[0] : "";
+}
+
+function setToken(token) {
+  state.token = typeof token === "string" ? token.trim() : "";
+  if (elements.tokenState) {
+    elements.tokenState.textContent = state.token ? t("configured") : t("notConfigured");
   }
 }
 
-function resolveProxyOrigin() {
-  return window.location.origin;
+function readJwtPrincipal(token) {
+  const normalizedToken = typeof token === "string" ? token.trim() : "";
+  const payloadSegment = normalizedToken.split(".")[1] || "";
+  if (!payloadSegment || !/^[A-Za-z0-9_-]+$/.test(payloadSegment)) return null;
+
+  try {
+    const base64 = payloadSegment
+      .replace(/-/g, "+")
+      .replace(/_/g, "/")
+      .padEnd(Math.ceil(payloadSegment.length / 4) * 4, "=");
+    const payload = JSON.parse(window.atob(base64));
+    if (!isRecord(payload)) return null;
+    const normalizeClaim = (value) =>
+      typeof value === "string" || typeof value === "number"
+        ? String(value).trim()
+        : "";
+    const uid = normalizeClaim(payload.uid);
+    const sub = normalizeClaim(payload.sub);
+    if (!uid && !sub) return null;
+    return { uid, sub };
+  } catch {
+    return null;
+  }
+}
+
+function hasSameJwtPrincipal(currentToken, nextToken) {
+  const currentPrincipal = readJwtPrincipal(currentToken);
+  const nextPrincipal = readJwtPrincipal(nextToken);
+  return (
+    Boolean(currentPrincipal) &&
+    Boolean(nextPrincipal) &&
+    currentPrincipal.uid === nextPrincipal.uid &&
+    currentPrincipal.sub === nextPrincipal.sub
+  );
+}
+
+function hasHandshakeSession(payload) {
+  return (
+    isRecord(payload) &&
+    payload.handshakeSession === state.handshakeSession &&
+    Boolean(state.handshakeSession)
+  );
+}
+
+function postToHost(message) {
+  if (!state.hostOrigin || !window.parent || window.parent === window) return false;
+  window.parent.postMessage(message, state.hostOrigin);
+  return true;
 }
 
 function postPluginReady() {
-  if (window.parent && window.parent !== window && !window.__PLUGIN_READY_SENT__) {
-    window.__PLUGIN_READY_SENT__ = true;
-    window.parent.postMessage(
-      {
-        type: "PLUGIN_READY",
-        id: genId(`${PLUGIN_ID}-ready`),
+  if (
+    !state.hostOrigin ||
+    !window.parent ||
+    window.parent === window ||
+    window.__PLUGIN_READY_SENT__
+  ) return;
+
+  window.__PLUGIN_READY_SENT__ = true;
+  postToHost({
+    type: "PLUGIN_READY",
+    id: genId(`${PLUGIN_ID}-ready`),
+    payload: { handshakeSession: state.handshakeSession },
+  });
+}
+
+function settleTokenRefreshWaiter(token = "", updateToken = false) {
+  const waiter = state.tokenRefreshWaiter;
+  if (!waiter) return false;
+  state.tokenRefreshWaiter = null;
+  window.clearTimeout(waiter.timer);
+  if (updateToken) setToken(token);
+  waiter.resolve(updateToken ? state.token : "");
+  return true;
+}
+
+function waitForSharedTokenRefresh(signal) {
+  const waiter = state.tokenRefreshWaiter;
+  if (!waiter) return Promise.resolve("");
+  if (signal?.aborted) return Promise.reject(abortReason(signal));
+
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      signal?.removeEventListener("abort", onAbort);
+      reject(abortReason(signal));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+    waiter.promise.then(
+      (token) => {
+        signal?.removeEventListener("abort", onAbort);
+        resolve(token);
       },
-      "*"
+      (error) => {
+        signal?.removeEventListener("abort", onAbort);
+        reject(error);
+      }
+    );
+  });
+}
+
+function requestTokenRefresh(signal) {
+  if (
+    !state.handshakeComplete ||
+    !state.handshakeSession ||
+    !state.hostSource ||
+    !state.hostOrigin
+  ) {
+    return Promise.resolve("");
+  }
+
+  if (
+    state.tokenRefreshWaiter &&
+    state.tokenRefreshWaiter.handshakeSession !== state.handshakeSession
+  ) {
+    settleTokenRefreshWaiter("");
+  }
+
+  if (!state.tokenRefreshWaiter) {
+    let resolveWaiter;
+    const promise = new Promise((resolve) => {
+      resolveWaiter = resolve;
+    });
+    const handshakeSession = state.handshakeSession;
+    const waiter = {
+      handshakeSession,
+      promise,
+      resolve: resolveWaiter,
+      timer: 0,
+    };
+    state.tokenRefreshWaiter = waiter;
+    waiter.timer = window.setTimeout(() => {
+      if (state.tokenRefreshWaiter !== waiter) return;
+      settleTokenRefreshWaiter("");
+    }, TOKEN_REFRESH_TIMEOUT_MS);
+
+    const posted = postToHost({
+      type: "TOKEN_REFRESH_REQUEST",
+      id: genId(`${PLUGIN_ID}-token-refresh`),
+      payload: { handshakeSession },
+    });
+    if (!posted) settleTokenRefreshWaiter("");
+  }
+
+  return waitForSharedTokenRefresh(signal);
+}
+
+function isTrustedHostEvent(event) {
+  return (
+    Boolean(state.hostOrigin) &&
+    event.source === window.parent &&
+    event.origin === state.hostOrigin
+  );
+}
+
+function handleHostMessage(event) {
+  if (!isTrustedHostEvent(event)) return;
+  const message = event.data || {};
+  if (!isRecord(message) || typeof message.type !== "string") return;
+  const payload = isRecord(message.payload) ? message.payload : {};
+  const isLegacyLocaleMessage = [
+    "LANGUAGE_CHANGE",
+    "LOCALE_CHANGE",
+    "SET_LANGUAGE",
+    "SET_LOCALE",
+    "CHANGE_LANGUAGE",
+    "CHANGE_LOCALE",
+    "LANG_CHANGE",
+    "I18N_CHANGE",
+  ].includes(message.type);
+
+  if (isLegacyLocaleMessage) {
+    if (!("handshakeSession" in payload) || hasHandshakeSession(payload)) {
+      updateLocale(extractLocaleCandidate(message));
+    }
+    return;
+  }
+
+  if (!hasHandshakeSession(payload)) return;
+
+  if (message.type === "INIT") {
+    if (state.handshakeComplete && event.source !== state.hostSource) return;
+    const wasInitialized = state.handshakeComplete;
+    state.handshakeComplete = true;
+    state.hostSource = event.source;
+    if (state.handshakeTimer) {
+      window.clearTimeout(state.handshakeTimer);
+      state.handshakeTimer = 0;
+    }
+    state.config = isRecord(payload.config) ? payload.config : {};
+    hideRunError();
+    elements.apiBase.textContent = resolveApiBase();
+    updateLocale(extractLocaleCandidate(message));
+    log(t("hostInit"));
+    if (wasInitialized) {
+      resetForIdentityChange(payload.token);
+    } else {
+      clearSceneSelection();
+      setToken(payload.token);
+      loadMyScenes({ resetPage: true });
+    }
+    return;
+  }
+
+  if (!state.handshakeComplete || event.source !== state.hostSource) return;
+
+  if (message.type === "TOKEN_UPDATE") {
+    const nextToken = typeof payload.token === "string" ? payload.token.trim() : "";
+    const refreshIsPending =
+      state.tokenRefreshWaiter?.handshakeSession === state.handshakeSession;
+    if (refreshIsPending) {
+      if (!nextToken) {
+        log(t("tokenUpdated"));
+        resetForIdentityChange("");
+        return;
+      }
+      if (nextToken === state.token) return;
+      if (hasSameJwtPrincipal(state.token, nextToken)) {
+        log(t("tokenUpdated"));
+        settleTokenRefreshWaiter(nextToken, true);
+        return;
+      }
+      log(t("tokenUpdated"));
+      resetForIdentityChange(nextToken);
+      return;
+    }
+    if (nextToken === state.token) return;
+    log(t("tokenUpdated"));
+    resetForIdentityChange(nextToken);
+    return;
+  }
+
+  if (message.type === "DESTROY") {
+    destroyPreview();
+  }
+}
+
+async function resetForIdentityChange(nextToken) {
+  state.identityGeneration += 1;
+  const generation = state.identityGeneration;
+  clearIdentityState();
+  setToken("");
+  await stopScene({ focusPicker: false });
+  if (generation !== state.identityGeneration) return;
+  setToken(nextToken);
+  loadMyScenes({ resetPage: true });
+}
+
+function normalizeSceneListItem(item) {
+  if (!isRecord(item)) return null;
+  const id = normalizePositiveSceneId(item.id);
+  if (!id) return null;
+  const imageUrl =
+    typeof item.image === "string"
+      ? item.image
+      : isRecord(item.image) && typeof item.image.url === "string"
+        ? item.image.url
+        : "";
+  let thumbnail = "";
+  if (imageUrl) {
+    try {
+      thumbnail = normalizeAllowedAssetUrl(imageUrl, resolveAssetBaseOrigin());
+    } catch {
+      // A denied thumbnail must not break access to the scene list.
+    }
+  }
+  return {
+    id,
+    name: typeof item.name === "string" && item.name.trim() ? item.name.trim() : t("unnamedScene"),
+    uuid: typeof item.uuid === "string" ? item.uuid : "",
+    updatedAt:
+      typeof item.updated_at === "string" || typeof item.updated_at === "number"
+        ? item.updated_at
+        : "",
+    thumbnail,
+  };
+}
+
+function normalizeSceneListPayload(json) {
+  const data = unwrapApiData(json);
+  const items = Array.isArray(data)
+    ? data
+    : isRecord(data) && Array.isArray(data.items)
+      ? data.items
+      : [];
+  return items.map(normalizeSceneListItem).filter(Boolean);
+}
+
+function readPaginationHeader(response, name, fallback) {
+  const raw = response.headers.get(name);
+  if (raw === null || raw === "") return fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+function formatSceneDate(value) {
+  if (!value) return "";
+  const numeric = Number(value);
+  const date = new Date(Number.isFinite(numeric) && numeric > 0 && numeric < 1e12 ? numeric * 1000 : value);
+  if (Number.isNaN(date.getTime())) return "";
+  try {
+    return new Intl.DateTimeFormat(currentLocaleCode(), {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    }).format(date);
+  } catch {
+    return "";
+  }
+}
+
+function sceneListMessage() {
+  switch (state.sceneListStatus) {
+    case "awaiting-host":
+      return { text: t("awaitingHost"), tone: "" };
+    case "loading":
+      return { text: t("loadingScenes"), tone: "" };
+    case "empty":
+      return { text: t("noScenes"), tone: "" };
+    case "search-empty":
+      return { text: t("noSearchResults"), tone: "" };
+    case "401":
+      return { text: `${t("loginExpired")} (WGP-SCENE-LIST-401)`, tone: "error" };
+    case "403":
+      return { text: `${t("previewForbidden")} (WGP-SCENE-LIST-403)`, tone: "error" };
+    case "handshake-error":
+      return { text: `${t("handshakeFailed")} (WGP-HANDSHAKE)`, tone: "error" };
+    case "error":
+      return { text: `${t("sceneListError")} (WGP-SCENE-LIST)`, tone: "error" };
+    default:
+      return { text: "", tone: "" };
+  }
+}
+
+function createSceneThumbnailPlaceholder() {
+  const placeholder = document.createElement("span");
+  placeholder.className = "scene-thumbnail-placeholder";
+  placeholder.setAttribute("aria-hidden", "true");
+  placeholder.textContent = "◇";
+  return placeholder;
+}
+
+function renderScenePicker() {
+  if (!elements.sceneSearch || !elements.sceneOptions) return;
+  const message = sceneListMessage();
+  elements.sceneListState.textContent = message.text;
+  elements.sceneListState.dataset.tone = message.tone;
+  elements.sceneListState.setAttribute(
+    "role",
+    message.tone === "error" ? "alert" : "status"
+  );
+  elements.sceneListState.setAttribute(
+    "aria-live",
+    message.tone === "error" ? "assertive" : "polite"
+  );
+  elements.sceneOptions.replaceChildren();
+
+  for (const scene of state.scenes) {
+    const option = document.createElement("button");
+    option.type = "button";
+    option.className = "scene-option";
+    option.setAttribute("role", "option");
+    option.dataset.sceneOption = String(scene.id);
+    option.id = `scene-option-${scene.id}`;
+    option.setAttribute("aria-selected", String(state.selectedSceneId === scene.id));
+
+    if (scene.thumbnail) {
+      const image = document.createElement("img");
+      image.className = "scene-thumbnail";
+      image.alt = "";
+      image.loading = "lazy";
+      image.referrerPolicy = "no-referrer";
+      image.crossOrigin = "anonymous";
+      image.addEventListener(
+        "error",
+        () => image.replaceWith(createSceneThumbnailPlaceholder()),
+        { once: true }
+      );
+      image.src = scene.thumbnail;
+      option.append(image);
+    } else {
+      option.append(createSceneThumbnailPlaceholder());
+    }
+
+    const copy = document.createElement("span");
+    copy.className = "scene-option-copy";
+    const name = document.createElement("span");
+    name.className = "scene-option-name";
+    name.textContent = scene.name;
+    const meta = document.createElement("span");
+    meta.className = "scene-option-meta";
+    const formattedDate = formatSceneDate(scene.updatedAt);
+    meta.textContent = t("sceneOptionMeta", {
+      id: scene.id,
+      updated: formattedDate ? t("sceneUpdated", { date: formattedDate }) : "",
+    });
+    copy.append(name, meta);
+    option.append(copy);
+
+    const check = document.createElement("span");
+    check.className = "scene-option-check";
+    check.setAttribute("aria-hidden", "true");
+    check.textContent = state.selectedSceneId === scene.id ? "✓" : "";
+    option.append(check);
+    option.addEventListener("click", () => selectScene(scene));
+    elements.sceneOptions.append(option);
+  }
+
+  const awaiting = state.sceneListStatus === "awaiting-host";
+  elements.sceneSearch.disabled = awaiting;
+  elements.sceneToggle.disabled = awaiting;
+  elements.sceneRetry.hidden = state.sceneListStatus !== "error";
+  const hasPages = state.sceneListStatus === "ready" && state.scenePageCount > 1;
+  elements.scenePagination.hidden = !hasPages;
+  elements.scenePrevious.disabled = state.scenePage <= 1 || state.sceneListStatus === "loading";
+  elements.sceneNext.disabled =
+    state.scenePage >= state.scenePageCount || state.sceneListStatus === "loading";
+  elements.scenePage.textContent = t("pageStatus", {
+    page: state.scenePage,
+    pages: state.scenePageCount,
+    total: state.sceneTotalCount,
+  });
+  elements.scenePopover.hidden = !state.scenePickerOpen;
+  elements.sceneSearch.setAttribute("aria-expanded", String(state.scenePickerOpen));
+  elements.sceneToggle.setAttribute("aria-expanded", String(state.scenePickerOpen));
+  renderControls();
+}
+
+function setScenePickerOpen(open) {
+  state.scenePickerOpen = Boolean(open) && state.sceneListStatus !== "awaiting-host";
+  renderScenePicker();
+}
+
+function selectScene(scene) {
+  const id = normalizePositiveSceneId(scene?.id);
+  if (!id) return;
+  state.selectedSceneId = id;
+  state.selectedScene = { ...scene, id };
+  elements.sceneSearch.value = state.selectedScene.name || `#${id}`;
+  if (elements.sceneId) elements.sceneId.value = String(id);
+  transitionLifecycle(PREVIEW_LIFECYCLE.READY);
+  setScenePickerOpen(false);
+  setStatus(t("selectScene"), "ready");
+}
+
+function clearSceneSelection({ keepSearch = false } = {}) {
+  state.selectedSceneId = null;
+  state.selectedScene = null;
+  if (elements.sceneId) elements.sceneId.value = "";
+  if (!keepSearch && elements.sceneSearch) elements.sceneSearch.value = "";
+  renderControls();
+}
+
+function abortSceneList() {
+  state.sceneListGeneration += 1;
+  state.sceneListController?.abort();
+  state.sceneListController = null;
+}
+
+function focusSceneListError(generation) {
+  window.setTimeout(() => {
+    if (
+      generation !== state.sceneListGeneration ||
+      state.lifecycle !== PREVIEW_LIFECYCLE.TERMINAL_ERROR
+    ) return;
+    const target =
+      state.sceneListStatus === "error"
+        ? elements.sceneRetry
+        : elements.sceneListState;
+    target?.focus();
+  }, 0);
+}
+
+function createRequestContext(externalSignal, timeoutMs = getRequestTimeoutMs()) {
+  const controller = new AbortController();
+  let timedOut = false;
+  const abortFromExternal = () => controller.abort(externalSignal?.reason);
+  if (externalSignal?.aborted) abortFromExternal();
+  else externalSignal?.addEventListener("abort", abortFromExternal, { once: true });
+  const timer = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  return {
+    signal: controller.signal,
+    didTimeOut: () => timedOut,
+    cleanup() {
+      window.clearTimeout(timer);
+      externalSignal?.removeEventListener("abort", abortFromExternal);
+    },
+  };
+}
+
+function abortReason(signal) {
+  if (signal?.reason instanceof Error) return signal.reason;
+  return new DOMException("The request was aborted", "AbortError");
+}
+
+function waitForRetryBackoff(delayMs, signal) {
+  if (signal?.aborted) return Promise.reject(abortReason(signal));
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, delayMs);
+    const onAbort = () => {
+      window.clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      reject(abortReason(signal));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function shouldRetryPlatformGet(error) {
+  if (RETRYABLE_PLATFORM_STATUSES.has(Number(error?.status || 0))) return true;
+  return /-(?:NETWORK|TIMEOUT)$/.test(String(error?.code || ""));
+}
+
+async function requestPlatformResponse(url, { signal, code = "WGP-API" } = {}) {
+  if (!state.token) {
+    throw new PreviewError(code, "Authentication required", {
+      status: 401,
+      retryable: false,
+    });
+  }
+  if (!isAllowedPlatformRequestUrl(url)) {
+    throw new PreviewError("WGP-API-ORIGIN", "Platform API origin denied", {
+      retryable: false,
+    });
+  }
+
+  let retryableFailures = 0;
+  let retriedAfterTokenRefresh = false;
+  while (true) {
+    if (signal?.aborted) throw abortReason(signal);
+    const requestToken = state.token;
+    if (!requestToken) {
+      throw new PreviewError(code, "Authentication required", {
+        status: 401,
+        retryable: false,
+      });
+    }
+    const request = createRequestContext(signal);
+    let failure = null;
+    try {
+      const response = await fetch(url.toString(), {
+        method: "GET",
+        cache: "no-store",
+        credentials: "omit",
+        redirect: "error",
+        referrerPolicy: "no-referrer",
+        signal: request.signal,
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${requestToken}`,
+        },
+      });
+      if (!response.ok) {
+        throw new PreviewError(code, `Platform API returned ${response.status}`, {
+          status: response.status,
+          retryable: ![401, 403, 404].includes(response.status),
+        });
+      }
+      const json = await response.json();
+      return { response, json };
+    } catch (error) {
+      if (signal?.aborted) throw abortReason(signal);
+      if (request.didTimeOut()) {
+        failure = new PreviewError(`${code}-TIMEOUT`, "Platform API request timed out");
+      } else if (error instanceof PreviewError) {
+        failure = error;
+      } else if (error?.name === "AbortError") {
+        throw error;
+      } else if (error instanceof SyntaxError) {
+        failure = new PreviewError(
+          `${code}-INVALID-JSON`,
+          "Platform API returned invalid JSON",
+          { retryable: false }
+        );
+      } else {
+        failure = new PreviewError(`${code}-NETWORK`, "Platform API network error");
+      }
+    } finally {
+      request.cleanup();
+    }
+
+    if (Number(failure?.status || 0) === 401 && !retriedAfterTokenRefresh) {
+      retriedAfterTokenRefresh = true;
+      const refreshedToken = await requestTokenRefresh(signal);
+      if (refreshedToken) continue;
+    }
+
+    retryableFailures += 1;
+    const canRetry =
+      retryableFailures < PLATFORM_GET_MAX_ATTEMPTS &&
+      shouldRetryPlatformGet(failure);
+    if (!canRetry) throw failure;
+    await waitForRetryBackoff(
+      PLATFORM_GET_RETRY_DELAY_MS * retryableFailures,
+      signal
     );
   }
 }
 
-function handleHostMessage(event) {
-  if (window.parent && event.source !== window.parent) return;
-  const message = event.data || {};
-  if (!message || typeof message !== "object") return;
-  updateLocale(extractLocaleCandidate(message));
-  if (typeof message.type !== "string") return;
+async function requestMyScenes({ page, search, signal }) {
+  const url = resolvePlatformUrl("v1/verses");
+  url.searchParams.set("sort", "-updated_at");
+  url.searchParams.set("page", String(page));
+  url.searchParams.set("per-page", String(SCENE_PAGE_SIZE));
+  url.searchParams.set("expand", "image");
+  if (search) url.searchParams.set("VerseSearch[name]", search);
+  const { response, json } = await requestPlatformResponse(url, {
+    signal,
+    code: "WGP-SCENE-LIST",
+  });
+  const scenes = normalizeSceneListPayload(json);
+  return {
+    scenes,
+    page: Math.max(1, readPaginationHeader(response, "X-Pagination-Current-Page", page)),
+    pageCount: Math.max(1, readPaginationHeader(response, "X-Pagination-Page-Count", 1)),
+    perPage: Math.max(1, readPaginationHeader(response, "X-Pagination-Per-Page", SCENE_PAGE_SIZE)),
+    totalCount: readPaginationHeader(response, "X-Pagination-Total-Count", scenes.length),
+  };
+}
 
-  if (message.type === "INIT") {
-    const payload = message.payload || {};
-    setToken(typeof payload.token === "string" ? payload.token : "");
-    state.config =
-      payload.config && typeof payload.config === "object" ? payload.config : {};
-    elements.apiBase.textContent = resolveApiBase();
-    if (!state.running) {
-      setStatus(t("enterSceneId"), "ready");
+async function validateInitialSceneCandidate(generation) {
+  const sceneId = normalizePositiveSceneId(state.initialSceneId);
+  if (!sceneId) return;
+  state.initialSceneId = null;
+  const listed = state.scenes.find((scene) => scene.id === sceneId);
+  if (listed) {
+    selectScene(listed);
+    return;
+  }
+  try {
+    const scene = await requestVerse(sceneId, "lua", state.sceneListController?.signal);
+    if (generation !== state.sceneListGeneration) return;
+    selectScene(
+      normalizeSceneListItem(scene) || { id: sceneId, name: `#${sceneId}` }
+    );
+  } catch (error) {
+    if (error?.name !== "AbortError") {
+      log("WGP-SCENE-DATA-URL", { status: Number(error?.status || 0) });
     }
-    log(t("hostInit"));
+  }
+}
+
+async function loadMyScenes({ resetPage = false } = {}) {
+  if (!state.handshakeComplete) {
+    transitionLifecycle(PREVIEW_LIFECYCLE.HANDSHAKE, { recoverTerminal: true });
+    state.sceneListStatus = "awaiting-host";
+    renderScenePicker();
+    return;
+  }
+  if (!state.token) {
+    transitionLifecycle(PREVIEW_LIFECYCLE.TERMINAL_ERROR);
+    state.sceneListStatus = "401";
+    state.scenes = [];
+    setStatus(t("loginExpired"), "error");
+    setScenePickerOpen(true);
+    focusSceneListError(state.sceneListGeneration);
+    return;
   }
 
+  abortSceneList();
   if (
-    message.type === "LANGUAGE_CHANGE" ||
-    message.type === "LOCALE_CHANGE" ||
-    message.type === "SET_LANGUAGE" ||
-    message.type === "SET_LOCALE" ||
-    message.type === "CHANGE_LANGUAGE" ||
-    message.type === "CHANGE_LOCALE" ||
-    message.type === "LANG_CHANGE" ||
-    message.type === "I18N_CHANGE"
-  ) {
-    updateLocale(extractLocaleCandidate(message));
-  }
+    !transitionLifecycle(PREVIEW_LIFECYCLE.SCENE_LIST, {
+      recoverTerminal: true,
+    })
+  ) return;
+  setStatus(t("loadingScenes"), "busy");
+  const controller = new AbortController();
+  state.sceneListController = controller;
+  const generation = state.sceneListGeneration;
+  if (resetPage) state.scenePage = 1;
+  state.sceneListStatus = "loading";
+  renderScenePicker();
 
-  if (message.type === "TOKEN_UPDATE") {
-    const payload = message.payload || {};
-    setToken(typeof payload.token === "string" ? payload.token : "");
-    log(t("tokenUpdated"));
+  try {
+    const result = await requestMyScenes({
+      page: state.scenePage,
+      search: state.sceneSearch,
+      signal: controller.signal,
+    });
+    if (generation !== state.sceneListGeneration || controller.signal.aborted) return;
+    state.scenes = result.scenes;
+    state.scenePage = result.page;
+    state.scenePageCount = result.pageCount;
+    state.scenePerPage = result.perPage;
+    state.sceneTotalCount = result.totalCount;
+    state.sceneListStatus = result.scenes.length
+      ? "ready"
+      : state.sceneSearch
+        ? "search-empty"
+        : "empty";
+    transitionLifecycle(PREVIEW_LIFECYCLE.READY);
+    setStatus(t("selectScene"), "ready");
+    renderScenePicker();
+    await validateInitialSceneCandidate(generation);
+  } catch (error) {
+    if (controller.signal.aborted || generation !== state.sceneListGeneration) return;
+    state.scenes = [];
+    if (Number(error?.status) === 401) state.sceneListStatus = "401";
+    else if (Number(error?.status) === 403) state.sceneListStatus = "403";
+    else state.sceneListStatus = "error";
+    transitionLifecycle(PREVIEW_LIFECYCLE.TERMINAL_ERROR);
+    setStatus(
+      state.sceneListStatus === "401"
+        ? t("loginExpired")
+        : state.sceneListStatus === "403"
+          ? t("previewForbidden")
+          : t("sceneListError"),
+      "error"
+    );
+    log(
+      state.sceneListStatus === "401"
+        ? "WGP-SCENE-LIST-401"
+        : state.sceneListStatus === "403"
+          ? "WGP-SCENE-LIST-403"
+          : "WGP-SCENE-LIST",
+      { status: Number(error?.status || 0) }
+    );
+    setScenePickerOpen(true);
+    focusSceneListError(generation);
+  } finally {
+    if (state.sceneListController === controller) state.sceneListController = null;
   }
+}
+
+function clearIdentityState() {
+  settleTokenRefreshWaiter("");
+  abortSceneList();
+  state.runAbortController?.abort();
+  state.runAbortController = null;
+  if (state.sceneSearchTimer) {
+    window.clearTimeout(state.sceneSearchTimer);
+    state.sceneSearchTimer = 0;
+  }
+  state.scenes = [];
+  state.sceneSearch = "";
+  state.scenePage = 1;
+  state.scenePageCount = 1;
+  state.sceneTotalCount = 0;
+  clearSceneSelection();
+}
+
+async function destroyPreview() {
+  state.identityGeneration += 1;
+  clearIdentityState();
+  setToken("");
+  state.handshakeComplete = false;
+  state.hostSource = null;
+  await stopScene({ focusPicker: false });
+  transitionLifecycle(PREVIEW_LIFECYCLE.HANDSHAKE);
+  state.sceneListStatus = "awaiting-host";
+  setScenePickerOpen(false);
 }
 
 function cloneForUnityPreview(value) {
@@ -952,126 +2174,62 @@ function readUnityPreviewVerseCode(runtimeData, language) {
   return typeof found === "string" ? found : "";
 }
 
-function normalizeUnityPreviewRemoteAssetUrl(value) {
+function normalizeAllowedAssetUrl(value, assetBaseOrigin) {
+  const normalizedValue = String(value || "").trim().replace(/\\\//g, "/");
+  if (!normalizedValue || !ASSET_PATH_RE.test(normalizedValue)) return value;
+  let url;
   try {
-    const url = new URL(value.replace(/\\\//g, "/"));
-    if (url.protocol === "http:") {
-      url.protocol = "https:";
-    }
-    if (url.hostname === LEGACY_COS_HOST) {
-      url.protocol = "https:";
-      url.hostname = CDN_HOST;
-    }
-    return url.toString();
+    url = new URL(normalizedValue, assetBaseOrigin || undefined);
   } catch {
     return value;
   }
-}
-
-function normalizeUnityPreviewVideoUrl(value) {
-  try {
-    const url = new URL(value.replace(/\\\//g, "/"));
-    if (url.protocol === "http:") {
-      url.protocol = "https:";
-    }
-    return url.toString();
-  } catch {
-    return value;
-  }
-}
-
-function toUnityPreviewProxyRequestUrl(value, proxyOrigin) {
-  return `${proxyOrigin}/__xrugc_proxy__?url=${normalizeUnityPreviewRemoteAssetUrl(
-    value
-  )}&v=${encodeURIComponent(WEBGL_PREVIEW_VERSION)}`;
-}
-
-function toUnityPreviewAssetUrl(value, proxyOrigin) {
-  const normalizedRemoteUrl = normalizeUnityPreviewRemoteAssetUrl(value);
-  if (!shouldUseDirectCdnAssets()) {
-    return toUnityPreviewProxyRequestUrl(normalizedRemoteUrl, proxyOrigin);
+  if (!isAllowedSecureOrigin(url, allowedAssetOrigins())) {
+    throw new PreviewError("WGP-ASSET-DENIED", "Scene asset origin denied", {
+      retryable: false,
+    });
   }
 
-  try {
-    const url = new URL(normalizedRemoteUrl);
-    if (url.hostname === CDN_HOST) {
-      return url.toString();
-    }
-  } catch {
-    // Fall through to the proxy below.
+  // Preserve validated absolute URLs byte-for-byte. Re-serializing them can
+  // alter signed query encoding, Unicode, or repeated parameter representation.
+  if (/^[a-z][a-z\d+.-]*:\/\//i.test(normalizedValue)) {
+    return normalizedValue;
   }
-
-  return toUnityPreviewProxyRequestUrl(normalizedRemoteUrl, proxyOrigin);
+  if (normalizedValue.startsWith("//")) {
+    return `${url.protocol}${normalizedValue}`;
+  }
+  return url.toString();
 }
 
-function toUnityPreviewProxyUrl(value, proxyOrigin, assetBaseOrigin) {
-  const normalizedValue = value.replace(/\\\//g, "/");
-  if (!/^https?:\/\//i.test(normalizedValue)) {
-    if (normalizedValue.startsWith("//")) {
-      const absoluteUrl = `${window.location.protocol}${normalizedValue}`;
-      return toUnityPreviewAssetUrl(absoluteUrl, proxyOrigin);
-    }
-
-    if (normalizedValue.startsWith("/__xrugc_proxy__")) {
-      return `${proxyOrigin}${normalizedValue}`;
-    }
-
-    if (
-      !normalizedValue.startsWith("/") ||
-      !ASSET_PATH_RE.test(normalizedValue)
-    ) {
-      return value;
-    }
-
-    const absoluteUrl = new URL(normalizedValue, assetBaseOrigin).toString();
-    return toUnityPreviewAssetUrl(absoluteUrl, proxyOrigin);
-  }
-
-  try {
-    const url = new URL(normalizedValue);
-    if (url.pathname === "/__xrugc_proxy__") {
-      return `${proxyOrigin}${url.pathname}${url.search}`;
-    }
-    if (url.origin === proxyOrigin) return normalizedValue;
-  } catch {
-    return value;
-  }
-
-  return toUnityPreviewAssetUrl(normalizedValue, proxyOrigin);
-}
-
-function rewriteStringUrls(value, proxyOrigin, assetBaseOrigin) {
+function rewriteStringUrls(value, assetBaseOrigin) {
   const trimmed = value.trim();
   if (
     (trimmed.startsWith("{") || trimmed.startsWith("[")) &&
     trimmed.length >= 2
   ) {
+    let parsed;
     try {
-      const parsed = JSON.parse(value);
-      rewriteUnityPreviewUrls(parsed, proxyOrigin, assetBaseOrigin);
-      return JSON.stringify(parsed);
+      parsed = JSON.parse(value);
     } catch {
       // Continue with plain string replacement.
     }
+    if (parsed !== undefined) {
+      rewriteUnityPreviewUrls(parsed, assetBaseOrigin);
+      return JSON.stringify(parsed);
+    }
   }
 
-  const proxied = toUnityPreviewProxyUrl(value, proxyOrigin, assetBaseOrigin);
-  if (proxied !== value) return proxied;
-
-  return value.replace(/https?:\\?\/\\?\/[^\s"'<>]+/gi, (url) =>
-    toUnityPreviewProxyUrl(url, proxyOrigin, assetBaseOrigin)
-  );
+  return normalizeAllowedAssetUrl(value, assetBaseOrigin);
 }
 
-function rewriteUnityPreviewUrls(value, proxyOrigin, assetBaseOrigin) {
+function rewriteUnityPreviewUrls(value, assetBaseOrigin) {
   if (!value || typeof value !== "object") return;
 
   if (Array.isArray(value)) {
     value.forEach((item, index) => {
       if (typeof item === "string") {
-        value[index] = rewriteStringUrls(item, proxyOrigin, assetBaseOrigin);
+        value[index] = rewriteStringUrls(item, assetBaseOrigin);
       } else {
-        rewriteUnityPreviewUrls(item, proxyOrigin, assetBaseOrigin);
+        rewriteUnityPreviewUrls(item, assetBaseOrigin);
       }
     });
     return;
@@ -1079,9 +2237,9 @@ function rewriteUnityPreviewUrls(value, proxyOrigin, assetBaseOrigin) {
 
   Object.entries(value).forEach(([key, item]) => {
     if (typeof item === "string") {
-      value[key] = rewriteStringUrls(item, proxyOrigin, assetBaseOrigin);
+      value[key] = rewriteStringUrls(item, assetBaseOrigin);
     } else {
-      rewriteUnityPreviewUrls(item, proxyOrigin, assetBaseOrigin);
+      rewriteUnityPreviewUrls(item, assetBaseOrigin);
     }
   });
 }
@@ -1093,22 +2251,13 @@ function collectSceneResourceCacheUrls(value, urls = new Set()) {
     const trimmed = value.trim();
     if (!trimmed) return urls;
     try {
-      const url = new URL(trimmed, window.location.origin);
-      if (url.pathname === "/__xrugc_proxy__") {
-        const targetUrl = normalizeUnityPreviewRemoteAssetUrl(
-          url.searchParams.get("url") || ""
-        );
-        if (targetUrl && ASSET_PATH_RE.test(new URL(targetUrl).pathname)) {
-          urls.add(targetUrl);
-        }
-        return urls;
-      }
-
+      const url = new URL(trimmed, resolveAssetBaseOrigin() || undefined);
       if (
-        (url.hostname === CDN_HOST || url.hostname === LEGACY_COS_HOST) &&
-        ASSET_PATH_RE.test(url.pathname)
+        isAllowedSecureOrigin(url, allowedAssetOrigins()) &&
+        ASSET_PATH_RE.test(url.pathname) &&
+        !VIDEO_PATH_RE.test(url.pathname)
       ) {
-        urls.add(normalizeUnityPreviewRemoteAssetUrl(url.toString()));
+        urls.add(url.toString());
       }
     } catch {
       // Ignore non-URL strings.
@@ -1180,68 +2329,21 @@ function unwrapApiData(json) {
   return json;
 }
 
-async function requestJsonThroughProxy(url) {
-  url.searchParams.set("_", String(Date.now()));
-  const proxyUrl = new URL("/__xrugc_proxy__", window.location.origin);
-  proxyUrl.searchParams.set("url", url.toString());
-
-  const headers = {
-    Accept: "application/json",
-    "Cache-Control": "no-cache",
-    Pragma: "no-cache",
-  };
-  if (state.token) {
-    headers.Authorization = `Bearer ${state.token}`;
+async function requestVerse(sceneId, cl, signal) {
+  const id = normalizePositiveSceneId(sceneId);
+  if (!id) {
+    throw new PreviewError("WGP-SCENE-DATA", "Invalid scene id", {
+      retryable: false,
+    });
   }
-
-  const response = await fetch(proxyUrl.toString(), {
-    method: "GET",
-    cache: "no-store",
-    credentials: "same-origin",
-    headers,
-  });
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    if (response.status === 401 && !state.token) {
-      throw new Error(t("localTokenMissing"));
-    }
-    throw new Error(`API ${response.status}: ${text || response.statusText}`);
-  }
-
-  return unwrapApiData(await response.json());
-}
-
-async function requestSnapshot(sceneId) {
-  const url = new URL("/api/snapshot", window.location.origin);
-  url.searchParams.set("expand", SNAPSHOT_EXPAND);
-  url.searchParams.set("verse_id", String(sceneId));
-  url.searchParams.set("_", String(Date.now()));
-
-  const response = await fetch(url.toString(), {
-    method: "GET",
-    cache: "no-store",
-    credentials: "same-origin",
-    headers: {
-      Accept: "application/json",
-      "Cache-Control": "no-cache",
-      Pragma: "no-cache",
-    },
-  });
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`API ${response.status}: ${text || response.statusText}`);
-  }
-
-  return unwrapApiData(await response.json());
-}
-
-async function requestLegacyVerse(sceneId, cl) {
-  const url = new URL(`${resolveLegacyApiBase()}/v1/verses/${sceneId}`);
+  const url = resolvePlatformUrl(`v1/verses/${id}`);
   url.searchParams.set("expand", UNITY_PREVIEW_VERSE_EXPAND);
   url.searchParams.set("cl", cl);
-  return requestJsonThroughProxy(url);
+  const { json } = await requestPlatformResponse(url, {
+    signal,
+    code: "WGP-SCENE-DATA",
+  });
+  return unwrapApiData(json);
 }
 
 function buildPayload(sceneId, runtimeData, scriptRuntimeData) {
@@ -1273,11 +2375,7 @@ function buildPayload(sceneId, runtimeData, scriptRuntimeData) {
     },
   };
 
-  rewriteUnityPreviewUrls(
-    payload,
-    resolveProxyOrigin(),
-    resolveAssetBaseOrigin()
-  );
+  rewriteUnityPreviewUrls(payload, resolveAssetBaseOrigin());
 
   return payload;
 }
@@ -1291,12 +2389,14 @@ function updateSummary(payload) {
 }
 
 function postScenePayloadToUnity(payload) {
+  if (!state.frameOrigin || !state.frameSession || !elements.frame.contentWindow) return;
   elements.frame.contentWindow.postMessage(
     {
       type: "load-scene-json",
+      session: state.frameSession,
       payload,
     },
-    "*"
+    state.frameOrigin
   );
 }
 
@@ -1325,12 +2425,13 @@ function isUnityFrameStopped() {
 }
 
 function startRunAttempt() {
+  state.runAbortController?.abort();
   state.runSerial += 1;
   return state.runSerial;
 }
 
 function isCurrentRunAttempt(runSerial) {
-  return runSerial === state.runSerial && !state.stopped;
+  return runSerial === state.runSerial && !state.stopped && !state.runTerminal;
 }
 
 function unloadUnityFrame() {
@@ -1339,13 +2440,60 @@ function unloadUnityFrame() {
   state.cacheActive = false;
   state.sceneVisible = false;
   state.frameSession = "";
+  state.frameOrigin = "";
   state.payload = null;
   elements.frame.src = "about:blank";
 }
 
+function hideRunError() {
+  if (elements.runError) elements.runError.hidden = true;
+  if (elements.runRetry) elements.runRetry.hidden = false;
+}
+
+function runErrorPresentation(error) {
+  const status = Number(error?.status || 0);
+  if (/^WGP-(?:HANDSHAKE|CONFIG|API-ORIGIN)/.test(String(error?.code || ""))) {
+    return { code: error.code, title: t("handshakeFailed") };
+  }
+  if (error?.code === "WGP-ASSET-DENIED") {
+    return { code: "WGP-ASSET-DENIED", title: t("sceneDataFailed") };
+  }
+  if (status === 401) {
+    return { code: "WGP-SCENE-DATA-401", title: t("sceneDataUnauthorized") };
+  }
+  if (status === 403) {
+    return { code: "WGP-SCENE-DATA-403", title: t("sceneDataForbidden") };
+  }
+  if (status === 404) {
+    return { code: "WGP-SCENE-DATA-404", title: t("sceneDataNotFound") };
+  }
+  return { code: error?.code || "WGP-SCENE-DATA", title: t("sceneDataFailed") };
+}
+
+function showRunError(error) {
+  const presentation = runErrorPresentation(error);
+  transitionLifecycle(PREVIEW_LIFECYCLE.TERMINAL_ERROR);
+  state.running = false;
+  state.sceneLoading = false;
+  state.sceneResourceLoading = false;
+  state.cacheActive = false;
+  setStatus(t("runFailed"), "error");
+  setLoadingShield(false);
+  clearLoadingProgress();
+  if (elements.runError) {
+    elements.runErrorTitle.textContent = presentation.title;
+    elements.runErrorCode.textContent = presentation.code;
+    elements.runRetry.hidden = error?.retryable === false;
+    elements.runError.hidden = false;
+    window.setTimeout(() => elements.runError.focus(), 0);
+  }
+  log(presentation.code, { status: Number(error?.status || 0) });
+  renderControls();
+}
+
 async function runScene() {
-  const sceneId = Number(elements.sceneId.value);
-  if (!Number.isFinite(sceneId) || sceneId <= 0) {
+  const sceneId = normalizePositiveSceneId(state.selectedSceneId);
+  if (!sceneId) {
     setStatus(t("enterValidSceneId"), "error");
     state.sceneLoading = false;
     state.sceneResourceLoading = false;
@@ -1353,19 +2501,23 @@ async function runScene() {
     setLoadingShield(false);
     clearLoadingProgress();
     renderControls();
-    elements.sceneId.focus();
+    (state.allowManualSceneId ? elements.sceneId : elements.sceneSearch)?.focus();
     return;
   }
 
   const runSerial = startRunAttempt();
+  if (
+    !transitionLifecycle(PREVIEW_LIFECYCLE.LOADING_SCENE, {
+      recoverTerminal: true,
+    })
+  ) return;
+  const runController = new AbortController();
+  state.runAbortController = runController;
+  hideRunError();
+  state.stopped = false;
   state.payload = null;
   state.sceneVisible = false;
   state.sceneResourceLoading = false;
-  if (isUnityFrameStopped() || !state.frameReady) {
-    loadUnityFrame();
-  } else {
-    state.stopped = false;
-  }
   state.running = true;
   state.sceneLoading = true;
   setControlsBusy(true);
@@ -1374,12 +2526,10 @@ async function runScene() {
   log(t("sceneReadStart", { sceneId }));
 
   try {
-    const [runtimeData, scriptRuntimeData] = shouldUseLegacyVerseApi()
-      ? await Promise.all([
-          requestLegacyVerse(sceneId, "lua"),
-          requestLegacyVerse(sceneId, "js"),
-        ])
-      : [await requestSnapshot(sceneId), {}];
+    const [runtimeData, scriptRuntimeData] = await Promise.all([
+      requestVerse(sceneId, "lua", runController.signal),
+      requestVerse(sceneId, "js", runController.signal),
+    ]);
     if (!isCurrentRunAttempt(runSerial)) {
       return;
     }
@@ -1388,29 +2538,33 @@ async function runScene() {
     if (!isCurrentRunAttempt(runSerial)) {
       return;
     }
+    if (!isUnityFrameStopped()) unloadUnityFrame();
     state.payload = payload;
     updateSummary(payload);
     warmSceneResourceCache(payload);
     setStatus(t("sendingUnity"), "busy");
+    if (!transitionLifecycle(PREVIEW_LIFECYCLE.STARTING_RUNNER)) return;
     setLocalizedLoadingShield(true, "startingScene", "startingSceneDetail");
+    loadUnityFrame({ autoRun: true });
     sendPayloadToUnity(payload);
   } catch (error) {
-    state.running = false;
-    state.sceneLoading = false;
-    state.sceneResourceLoading = false;
-    setStatus(t("runFailed"), "error");
-    setLoadingShield(false);
-    log(error instanceof Error ? error.message : String(error));
+    if (runController.signal.aborted || runSerial !== state.runSerial) return;
+    runController.abort(error);
+    showRunError(error);
   } finally {
-    setControlsBusy(false);
-    hideLoadingShieldIfReady();
+    if (state.runAbortController === runController) state.runAbortController = null;
+    if (runSerial === state.runSerial) {
+      setControlsBusy(false);
+      hideLoadingShieldIfReady();
+    }
   }
 }
 
 function readInitialSceneId() {
   const query = readQuery();
-  const value = query.get("sceneId") || query.get("id") || "";
-  if (value) elements.sceneId.value = value;
+  state.initialSceneId = normalizePositiveSceneId(
+    query.get("sceneId") || query.get("id") || ""
+  );
 }
 
 function loadUnityFrame({ clearPayload = false, autoRun = false } = {}) {
@@ -1427,44 +2581,89 @@ function loadUnityFrame({ clearPayload = false, autoRun = false } = {}) {
   }
   setLocalizedLoadingShield(true, "loadingPlugin", "loadingPluginDetail");
   const frameUrl = new URL("./embed.html", window.location.href);
+  state.frameOrigin = frameUrl.origin;
   frameUrl.searchParams.set("embed", "1");
   frameUrl.searchParams.set("plugin", "1");
   frameUrl.searchParams.set("v", WEBGL_PREVIEW_VERSION);
   frameUrl.searchParams.set("session", frameSession);
   frameUrl.searchParams.set("lang", readQuery().get("lang") || document.documentElement.lang);
-  if (shouldUseDirectCdnAssets()) {
-    frameUrl.searchParams.set("assetMode", "direct");
-  }
+  frameUrl.searchParams.set("loaderTimeoutMs", String(getUnityLoaderTimeoutMs()));
+  frameUrl.searchParams.set("maxDpr", String(getMaxDevicePixelRatio()));
   elements.frame.src = frameUrl.toString();
 }
 
-function stopScene() {
+function disposeUnityFrame() {
+  if (
+    isUnityFrameStopped() ||
+    !elements.frame.contentWindow ||
+    !state.frameSession ||
+    !state.frameOrigin
+  ) {
+    unloadUnityFrame();
+    return Promise.resolve();
+  }
+
+  const session = state.frameSession;
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => {
+      if (state.disposeWaiter?.session !== session) return;
+      state.disposeWaiter = null;
+      log("WGP-DISPOSE-TIMEOUT");
+      unloadUnityFrame();
+      resolve();
+    }, getDisposeTimeoutMs());
+    state.disposeWaiter = {
+      session,
+      resolve() {
+        window.clearTimeout(timer);
+        if (state.disposeWaiter?.session === session) state.disposeWaiter = null;
+        unloadUnityFrame();
+        resolve();
+      },
+    };
+    elements.frame.contentWindow.postMessage(
+      { type: "webgl-preview-dispose", session },
+      state.frameOrigin
+    );
+  });
+}
+
+async function stopScene({ focusPicker = true } = {}) {
   startRunAttempt();
+  transitionLifecycle(PREVIEW_LIFECYCLE.STOPPING, { recoverTerminal: true });
+  state.runAbortController?.abort();
+  state.runAbortController = null;
   state.stopped = true;
   state.running = false;
   state.sceneVisible = false;
   state.sceneLoading = false;
   state.sceneResourceLoading = false;
-  unloadUnityFrame();
-  setStatus(t("enterSceneId"), "ready");
+  setControlsBusy(true);
+  try {
+    await disposeUnityFrame();
+  } finally {
+    setControlsBusy(false);
+  }
+  transitionLifecycle(PREVIEW_LIFECYCLE.STOPPED);
+  hideRunError();
+  setStatus(t("selectScene"), "ready");
   setLoadingShield(false);
   renderControls();
   log(t("stopped"));
+  if (focusPicker) elements.sceneSearch?.focus();
 }
 
-function rerunScene() {
-  if (!elements.sceneId.value) {
-    elements.sceneId.focus();
-    setStatus(t("enterSceneId"), "error");
+async function rerunScene() {
+  if (!normalizePositiveSceneId(state.selectedSceneId)) {
+    elements.sceneSearch?.focus();
+    setStatus(t("selectScene"), "error");
     return;
   }
-  stopScene();
-  runScene();
+  await stopScene({ focusPicker: false });
+  await runScene();
 }
 
 function setupFrame() {
-  setLocalizedLoadingShield(true, "loadingPlugin", "loadingPluginGuard");
-
   elements.frame.addEventListener("load", () => {
     if (state.stopped || elements.frame.src === "about:blank") {
       return;
@@ -1473,18 +2672,43 @@ function setupFrame() {
   });
 
   window.addEventListener("message", (event) => {
+    if (
+      event.source !== elements.frame.contentWindow ||
+      !state.frameOrigin ||
+      event.origin !== state.frameOrigin
+    ) return;
     const message = event.data || {};
-    if (message.session && message.session !== state.frameSession) {
+    if (!isRecord(message) || message.session !== state.frameSession) return;
+    if (message.type === "webgl-preview-disposed") {
+      state.disposeWaiter?.resolve();
+      return;
+    }
+    if (message.type === "webgl-preview-dispose-error") {
+      log(message.code || "WGP-DISPOSE");
+      state.disposeWaiter?.resolve();
+      return;
+    }
+    if (state.lifecycle === PREVIEW_LIFECYCLE.TERMINAL_ERROR) return;
+    if (
+      message.type === "unity-web-preview-error" ||
+      message.type === "webgl-preview-error"
+    ) {
+      showRunError(
+        new PreviewError(message.code || "WGP-UNITY-LOAD", "Unity runner failed")
+      );
       return;
     }
     if (message.type === "unity-web-preview-ready") {
-      if (state.stopped) {
+      if (
+        state.stopped ||
+        state.lifecycle !== PREVIEW_LIFECYCLE.STARTING_RUNNER
+      ) {
         return;
       }
       state.frameReady = true;
       log(t("runnerReady"));
       if (!state.running) {
-        setStatus(t("enterSceneId"), "ready");
+        setStatus(t("selectScene"), "ready");
         clearLoadingProgress();
       }
       if (state.payload) {
@@ -1493,6 +2717,10 @@ function setupFrame() {
       hideLoadingShieldIfReady();
     }
     if (message.type === "unity-web-preview-scene-forwarded") {
+      if (
+        !state.running ||
+        state.lifecycle !== PREVIEW_LIFECYCLE.STARTING_RUNNER
+      ) return;
       state.sceneLoading = false;
       state.sceneResourceLoading = true;
       setStatus(t("sceneResourceLoading"), "busy");
@@ -1501,7 +2729,12 @@ function setupFrame() {
       log(t("runnerAccepted"), { length: message.length });
     }
     if (message.type === "unity-web-preview-scene-visible") {
-      if (!state.running) {
+      if (
+        !state.running ||
+        !transitionLifecycle(PREVIEW_LIFECYCLE.RUNNING, {
+          runSession: message.session,
+        })
+      ) {
         return;
       }
       state.sceneVisible = true;
@@ -1523,15 +2756,29 @@ function setupFrame() {
       }
     }
     if (message.type === "webgl-preview-cache-status") {
+      const isBackgroundCache =
+        message.background === true || String(message.status).startsWith("background-");
+      if (
+        isBackgroundCache &&
+        (message.status === "background-started" ||
+          message.status === "background-progress")
+      ) {
+        state.cacheActive = false;
+        hideLoadingShieldIfReady();
+        return;
+      }
       if (
         message.status === "started" ||
         message.status === "fetching" ||
-        message.status === "progress"
+        message.status === "progress" ||
+        message.status === "background-started" ||
+        message.status === "background-progress"
       ) {
         state.cacheActive = true;
         const completed = Number(message.completed || 0);
         const total = Number(message.total || 0);
-        const path = message.path ? `：${message.path}` : "";
+        const resourceLabel = safeResourceLabel(message.path);
+        const path = resourceLabel ? `：${resourceLabel}` : "";
         const percent = formatPercent(completed, total);
         setLocalizedLoadingShield(true, "cachePlugin", "cacheDetail", {
           percent,
@@ -1542,19 +2789,25 @@ function setupFrame() {
         });
       }
 
-      if (message.status === "complete" || message.status === "cancelled") {
+      if (
+        message.status === "complete" ||
+        message.status === "incomplete" ||
+        message.status === "cancelled"
+      ) {
         state.cacheActive = false;
         hideLoadingShieldIfReady();
+        if (message.status === "incomplete") {
+          log(t("cacheFailed"), { code: "WGP-CACHE-INCOMPLETE" });
+        }
       }
 
       if (message.status === "error") {
         state.cacheActive = false;
         setLoadingShield(false);
-        log(t("cacheFailed"), { message: message.message });
+        log(t("cacheFailed"), { code: "WGP-CACHE" });
       }
     }
   });
-  loadUnityFrame();
 }
 
 function toggleFullscreenPreview() {
@@ -1565,12 +2818,10 @@ function toggleFullscreenPreview() {
         type: "webgl-preview-request-fullscreen",
         source: "webgl-preview",
         plugin: PLUGIN_ID,
+        payload: { handshakeSession: state.handshakeSession },
       };
-      window.parent.postMessage(payload, "*");
-      window.parent.postMessage(
-        { ...payload, type: "plugin-request-fullscreen" },
-        "*"
-      );
+      postToHost(payload);
+      postToHost({ ...payload, type: "plugin-request-fullscreen" });
     }
   };
   if (document.fullscreenElement) {
@@ -1590,23 +2841,102 @@ function toggleFullscreenPreview() {
 
 function setupControls() {
   elements.run.addEventListener("click", runScene);
-  elements.stop.addEventListener("click", stopScene);
+  elements.stop.addEventListener("click", () => stopScene());
   elements.reload.addEventListener("click", rerunScene);
   elements.fullscreen?.addEventListener("click", toggleFullscreenPreview);
-  elements.saveToken.addEventListener("click", () => {
-    setToken(elements.tokenInput.value, { persist: true });
-    log(state.token ? t("tokenSaved") : t("tokenCleared"));
+  elements.runRetry?.addEventListener("click", runScene);
+  elements.runReturn?.addEventListener("click", async () => {
+    await stopScene({ focusPicker: false });
+    setScenePickerOpen(true);
+    elements.sceneSearch?.focus();
   });
-  elements.tokenInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      setToken(elements.tokenInput.value, { persist: true });
-      log(state.token ? t("tokenSaved") : t("tokenCleared"));
-    }
+
+  const useDevelopmentToken = () => {
+    if (!state.allowDevelopmentToken) return;
+    const nextToken = elements.tokenInput?.value || "";
+    if (elements.tokenInput) elements.tokenInput.value = "";
+    state.handshakeComplete = true;
+    resetForIdentityChange(nextToken).then(() => {
+      log(nextToken ? t("tokenSaved") : t("tokenCleared"));
+    });
+  };
+  elements.saveToken?.addEventListener("click", useDevelopmentToken);
+  elements.tokenInput?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") useDevelopmentToken();
   });
+
   elements.sceneId.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       runScene();
     }
+  });
+  elements.sceneId.addEventListener("input", () => {
+    if (!state.allowManualSceneId) return;
+    const sceneId = normalizePositiveSceneId(elements.sceneId.value);
+    state.selectedSceneId = sceneId;
+    state.selectedScene = sceneId ? { id: sceneId, name: `#${sceneId}` } : null;
+    if (sceneId) transitionLifecycle(PREVIEW_LIFECYCLE.READY);
+    renderControls();
+  });
+
+  elements.sceneSearch.addEventListener("focus", () => setScenePickerOpen(true));
+  elements.sceneSearch.addEventListener("input", () => {
+    clearSceneSelection({ keepSearch: true });
+    state.sceneSearch = elements.sceneSearch.value.trim();
+    state.scenePage = 1;
+    if (state.sceneSearchTimer) window.clearTimeout(state.sceneSearchTimer);
+    state.sceneSearchTimer = window.setTimeout(() => {
+      state.sceneSearchTimer = 0;
+      loadMyScenes({ resetPage: true });
+    }, SCENE_SEARCH_DEBOUNCE_MS);
+  });
+  elements.sceneSearch.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      setScenePickerOpen(false);
+      return;
+    }
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setScenePickerOpen(true);
+      elements.sceneOptions.querySelector("[data-scene-option]")?.focus();
+    }
+  });
+  elements.sceneToggle.addEventListener("click", () => {
+    setScenePickerOpen(!state.scenePickerOpen);
+    if (state.scenePickerOpen) elements.sceneSearch.focus();
+  });
+  elements.sceneOptions.addEventListener("keydown", (event) => {
+    const options = [...elements.sceneOptions.querySelectorAll("[data-scene-option]")];
+    const currentIndex = options.indexOf(document.activeElement);
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setScenePickerOpen(false);
+      elements.sceneSearch.focus();
+      return;
+    }
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    event.preventDefault();
+    const delta = event.key === "ArrowDown" ? 1 : -1;
+    const nextIndex = Math.max(0, Math.min(options.length - 1, currentIndex + delta));
+    options[nextIndex]?.focus();
+  });
+  elements.sceneRetry.addEventListener("click", () => loadMyScenes());
+  elements.scenePrevious.addEventListener("click", () => {
+    if (state.scenePage <= 1) return;
+    state.scenePage -= 1;
+    loadMyScenes();
+  });
+  elements.sceneNext.addEventListener("click", () => {
+    if (state.scenePage >= state.scenePageCount) return;
+    state.scenePage += 1;
+    loadMyScenes();
+  });
+  elements.manualMode?.addEventListener("toggle", () => {
+    if (elements.manualMode.open) setScenePickerOpen(false);
+  });
+  document.addEventListener("pointerdown", (event) => {
+    if (!state.scenePickerOpen || elements.scenePicker.contains(event.target)) return;
+    setScenePickerOpen(false);
   });
 }
 
@@ -1637,27 +2967,73 @@ function setupLocaleSync() {
   patchHistory("replaceState");
 }
 
-function init() {
+async function init() {
+  transitionLifecycle(PREVIEW_LIFECYCLE.HANDSHAKE);
   state.locale = resolveLocale();
   applyI18n();
-  initLocalToken();
   readInitialSceneId();
+  state.handshakeSession = genId("handshake");
   if (elements.version) {
-    elements.version.textContent = `v${WEBGL_PREVIEW_VERSION}`;
+    elements.version.textContent = `v${resolvePreviewBuildVersion()}`;
   }
-  elements.apiBase.textContent = resolveApiBase();
   setupControls();
   setupLocaleSync();
   setupFrame();
-  window.addEventListener("message", handleHostMessage);
-  postPluginReady();
-  setStatus(t("loadingPlugin"), "busy");
+  state.sceneListStatus = "awaiting-host";
+  setStatus(t("awaitingHost"), "busy");
   renderControls();
+  renderScenePicker();
   log(t("opened"));
 
-  if (elements.sceneId.value) {
-    runScene();
+  try {
+    await loadRuntimeConfig();
+    elements.apiBase.textContent = resolveApiBase();
+    applyI18n();
+  } catch (error) {
+    state.sceneListStatus = "handshake-error";
+    showRunError(error);
+    return;
   }
+
+  if (window.parent === window && isExplicitLocalDevelopment()) {
+    state.handshakeComplete = true;
+    state.config = state.runtimeConfig;
+    state.sceneListStatus = "401";
+    transitionLifecycle(PREVIEW_LIFECYCLE.READY);
+    setStatus(t("selectScene"), "ready");
+    setScenePickerOpen(true);
+    return;
+  }
+
+  state.hostOrigin = resolveTrustedHostOrigin();
+  if (!state.hostOrigin || window.parent === window) {
+    state.sceneListStatus = "handshake-error";
+    showRunError(
+      new PreviewError("WGP-HANDSHAKE-ORIGIN", t("handshakeFailed"), {
+        retryable: false,
+      })
+    );
+    return;
+  }
+
+  state.handshakeTimer = window.setTimeout(() => {
+    if (state.handshakeComplete) return;
+    state.sceneListStatus = "handshake-error";
+    showRunError(
+      new PreviewError("WGP-HANDSHAKE-TIMEOUT", t("handshakeFailed"), {
+        retryable: false,
+      })
+    );
+  }, getHandshakeTimeoutMs());
+  window.addEventListener("message", handleHostMessage);
+  postPluginReady();
 }
+
+window.addEventListener("pagehide", () => {
+  state.identityGeneration += 1;
+  clearIdentityState();
+  unloadUnityFrame();
+  setToken("");
+});
 
 init();

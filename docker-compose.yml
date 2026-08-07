@@ -3,8 +3,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        WEBGL_PREVIEW_BASE_IMAGE: ${WEBGL_PREVIEW_BASE_IMAGE:-hkccr.ccs.tencentyun.com/plugins/webgl-preview@sha256:1e03190d0b44ca204869461862859198a801edb3b4c1bf00e8ee5e8da1d9bfe5}
+        REQUIRE_PINNED_BASE_IMAGE: ${REQUIRE_PINNED_BASE_IMAGE:-0}
+        REQUIRE_APPROVED_BUILD: ${REQUIRE_APPROVED_BUILD:-0}
     ports:
       - '127.0.0.1:3006:80'
+    environment:
+      HOST_API_BASE: ${HOST_API_BASE:-https://d.dev.xrugc.com}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1/api/health"]
       interval: 30s

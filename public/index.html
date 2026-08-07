@@ -7,25 +7,133 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <title>WebGL</title>
-    <link rel="stylesheet" href="./styles/plugin-runner.css?v=2026.05.21.13" />
+    <link rel="stylesheet" href="./styles/plugin-runner.css?v=__WEBGL_PREVIEW_BUILD_VERSION__" />
   </head>
   <body>
     <main class="app-shell">
       <header class="topbar" aria-label="WebGL 控制栏" data-i18n-aria-label="topbarLabel">
         <div class="controls">
-          <label class="scene-field" for="scene-id" data-scene-field>
-            <input
-              id="scene-id"
-              class="scene-input"
-              data-scene-id
-              inputmode="numeric"
-              autocomplete="off"
-              placeholder="请输入场景号：例如1416"
-              data-i18n-placeholder="sceneIdPlaceholder"
-            />
-          </label>
+          <div class="scene-controls" data-scene-controls>
+            <div class="scene-picker" data-scene-picker>
+              <label class="sr-only" for="scene-search" data-i18n="myScenesLabel">
+                我的场景
+              </label>
+              <div class="scene-picker-control">
+                <input
+                  id="scene-search"
+                  class="scene-search"
+                  type="search"
+                  role="combobox"
+                  aria-autocomplete="list"
+                  aria-controls="scene-options"
+                  aria-expanded="false"
+                  autocomplete="off"
+                  disabled
+                  placeholder="搜索我的场景"
+                  data-scene-search
+                  data-i18n-placeholder="searchScenes"
+                />
+                <button
+                  class="scene-picker-toggle"
+                  type="button"
+                  aria-label="打开我的场景"
+                  aria-controls="scene-options"
+                  aria-expanded="false"
+                  data-scene-toggle
+                  data-i18n-aria-label="openMyScenes"
+                  disabled
+                >
+                  <span aria-hidden="true">⌄</span>
+                </button>
+              </div>
 
-          <button class="button button-primary" type="button" data-run>
+              <div class="scene-popover" data-scene-popover hidden>
+                <div
+                  class="scene-list-state"
+                  role="status"
+                  aria-live="polite"
+                  tabindex="-1"
+                  data-scene-list-state
+                ></div>
+                <div
+                  id="scene-options"
+                  class="scene-options"
+                  role="listbox"
+                  aria-label="我的场景"
+                  data-scene-options
+                  data-i18n-aria-label="myScenesLabel"
+                ></div>
+                <button class="scene-retry" type="button" data-scene-retry hidden>
+                  <span data-i18n="retry">重试</span>
+                </button>
+                <div class="scene-pagination" data-scene-pagination hidden>
+                  <button
+                    class="scene-page-button"
+                    type="button"
+                    data-scene-previous
+                    data-i18n-aria-label="previousPage"
+                  >
+                    ‹
+                  </button>
+                  <span data-scene-page aria-live="polite">1 / 1</span>
+                  <button
+                    class="scene-page-button"
+                    type="button"
+                    data-scene-next
+                    data-i18n-aria-label="nextPage"
+                  >
+                    ›
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <details class="manual-mode" data-manual-mode hidden>
+              <summary data-i18n="manualMode">高级兼容模式</summary>
+              <div class="manual-panel">
+                <p data-i18n="manualHelp">
+                  手填场景号仍会经过平台权限校验，不会绕过场景授权。
+                </p>
+                <label class="scene-field" for="scene-id" data-scene-field>
+                  <span class="sr-only" data-i18n="sceneIdLabel">场景号</span>
+                  <input
+                    id="scene-id"
+                    class="scene-input"
+                    data-scene-id
+                    type="number"
+                    min="1"
+                    step="1"
+                    inputmode="numeric"
+                    autocomplete="off"
+                    placeholder="请输入正整数场景号"
+                    data-i18n-placeholder="manualSceneIdPlaceholder"
+                  />
+                </label>
+                <div class="development-token" data-development-token hidden>
+                  <p class="development-warning" data-i18n="developmentTokenWarning">
+                    仅用于本地开发。Token 只保存在当前页面内存中。
+                  </p>
+                  <label for="development-token" data-i18n="developmentTokenLabel">
+                    本地开发 Token
+                  </label>
+                  <div class="development-token-row">
+                    <input
+                      id="development-token"
+                      class="scene-input"
+                      type="password"
+                      autocomplete="off"
+                      data-token-input
+                    />
+                    <button class="button" type="button" data-save-token>
+                      <span data-i18n="useToken">仅本次使用</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </details>
+          </div>
+
+          <button class="button button-primary" type="button" data-run disabled>
             <span data-i18n="run">运行</span>
           </button>
           <button class="button" type="button" data-stop hidden>
@@ -95,7 +203,7 @@
             </div>
           </div>
         </div>
-        <div class="loading-shield" data-loading-shield>
+        <div class="loading-shield" data-loading-shield hidden>
           <div class="loading-panel sr-only" role="status" aria-live="polite">
             <div class="loading-title" data-loading-title>正在加载 WebGL 插件</div>
             <div class="loading-detail" data-loading-detail>
@@ -103,13 +211,23 @@
             </div>
           </div>
         </div>
+        <div class="runner-error" role="alert" tabindex="-1" data-run-error hidden>
+          <strong data-run-error-title>运行失败</strong>
+          <code data-run-error-code></code>
+          <div class="runner-error-actions">
+            <button class="button button-primary" type="button" data-run-retry>
+              <span data-i18n="retry">重试</span>
+            </button>
+            <button class="button" type="button" data-run-return>
+              <span data-i18n="returnToScenes">返回场景选择</span>
+            </button>
+          </div>
+        </div>
       </section>
 
       <section hidden aria-hidden="true">
         <span data-api-base></span>
         <span data-token-state></span>
-        <input data-token-input />
-        <button type="button" data-save-token></button>
         <span data-scene-name></span>
         <span data-resource-count></span>
         <span data-meta-count></span>
@@ -118,6 +236,6 @@
       </section>
     </main>
 
-    <script type="module" src="./modules/plugin-runner.js?v=2026.05.21.13"></script>
+    <script type="module" src="./modules/plugin-runner.js?v=__WEBGL_PREVIEW_BUILD_VERSION__"></script>
   </body>
 </html>

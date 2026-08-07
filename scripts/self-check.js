@@ -1,110 +1,240 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const {
+  readLfsPointer,
+  verifyBuildManifest,
+} = require('./build-manifest');
+const {
+  isPinnedImage,
+  resolveBaseImage,
+} = require('./check-base-image');
+const {
+  verifyArtifactCompatibility,
+} = require('./check-artifact-compatibility');
 
 const root = path.resolve(__dirname, '..');
 const required = [
+  'Dockerfile',
   'nginx.conf',
+  'nginx-security-headers.conf',
   'public/index.html',
   'public/embed.html',
   'public/modules/plugin-runner.js',
+  'public/modules/sw-build-cache.js',
   'public/styles/plugin-runner.css',
   'public/sw.js',
+  'public/runtime-config.json',
+  'public/build-manifest.json',
+  'public/artifact-compatibility.json',
   'public/plugin/manifest.json',
+  'scripts/build-manifest.js',
+  'scripts/check-base-image.js',
+  'scripts/check-artifact-compatibility.js',
 ];
 
-const missing = required.filter((item) => !fs.existsSync(path.join(root, item)));
-
-if (missing.length > 0) {
-  console.error('Missing required files:');
-  missing.forEach((item) => console.error(`- ${item}`));
-  process.exit(1);
-}
-
-const buildDir = path.join(root, 'public/Build');
-const buildFiles = fs.existsSync(buildDir) ? fs.readdirSync(buildDir) : [];
-const findBuildFile = (pattern, label) => {
-  const fileName = buildFiles.find((file) => pattern.test(file));
-  if (!fileName) {
-    console.error(`Missing WebGL build file: ${label}`);
-    process.exit(1);
-  }
-  return path.join('public/Build', fileName);
+const fail = (message) => {
+  throw new Error(message);
 };
 
-const buildName = '(?:[a-f0-9]{32}|public)';
-const loaderFile = findBuildFile(
-  new RegExp(`^${buildName}\\.loader\\.js$`),
-  'Unity loader.js'
-);
-const compressedBuildFiles = [
-  findBuildFile(new RegExp(`^${buildName}\\.data\\.(?:br|gz)$`), 'Unity data asset'),
-  findBuildFile(
-    new RegExp(`^${buildName}\\.framework\\.js\\.(?:br|gz)$`),
-    'Unity framework asset'
-  ),
-  findBuildFile(new RegExp(`^${buildName}\\.wasm\\.(?:br|gz)$`), 'Unity wasm asset'),
-];
+const checkRequiredFiles = () => {
+  const missing = required.filter((item) => !fs.existsSync(path.join(root, item)));
+  if (missing.length > 0) {
+    fail(`Missing required files:\n${missing.map((item) => `- ${item}`).join('\n')}`);
+  }
+};
 
-if (fs.statSync(path.join(root, loaderFile)).size < 1024) {
-  console.error(`Build loader is unexpectedly small: ${loaderFile}`);
-  process.exit(1);
-}
+const checkPluginManifest = () => {
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(root, 'public/plugin/manifest.json'), 'utf8')
+  );
+  if (manifest.id !== 'webgl-preview') {
+    fail(`Unexpected manifest id: ${manifest.id}`);
+  }
+  if (manifest.entry?.frontend !== './index.html') {
+    fail(`Frontend entry must be base-relative: ${manifest.entry?.frontend}`);
+  }
+  if (manifest.entry?.runner !== './embed.html') {
+    fail(`Runner entry must be base-relative: ${manifest.entry?.runner}`);
+  }
+};
 
-for (const file of compressedBuildFiles) {
-  const absolutePath = path.join(root, file);
-  const stat = fs.statSync(absolutePath);
-  const head = fs.readFileSync(absolutePath, 'utf8').slice(0, 128);
-  const isLfsPointer = head.includes('https://git-lfs.github.com/spec/v1');
+const checkRuntimeConfig = () => {
+  const config = JSON.parse(
+    fs.readFileSync(path.join(root, 'public/runtime-config.json'), 'utf8')
+  );
+  if (config.schemaVersion !== 1) fail('Unsupported runtime config schema');
+  for (const field of [
+    'trustedHostOrigins',
+    'platformApiOrigins',
+    'assetOrigins',
+  ]) {
+    if (!Array.isArray(config[field])) fail(`Runtime config ${field} must be an array`);
+    for (const value of config[field]) {
+      let origin;
+      try {
+        const url = new URL(value);
+        origin = url.origin;
+        if (url.protocol !== 'https:' || origin !== value) throw new Error();
+      } catch {
+        fail(`Production runtime config ${field} must contain exact HTTPS origins`);
+      }
+    }
+  }
+  if (config.allowManualSceneId !== false) {
+    fail('Production runtime config must hide manual scene IDs by default');
+  }
+  if (config.platformApiAlias !== './platform-api') {
+    fail('Production runtime config must use the fixed same-origin Platform API alias');
+  }
+};
 
-  if (isLfsPointer && process.env.CI) {
-    console.warn(`Build asset is a Git LFS pointer in CI; Docker image will reuse base asset: ${file}`);
-    continue;
+const checkNetworkConfig = () => {
+  const nginxConfig = fs.readFileSync(path.join(root, 'nginx.conf'), 'utf8');
+  for (const expectedSnippet of [
+    'location = /health',
+    'location = /__xrugc_proxy__',
+    'return 404',
+    'location = /runtime-config.json',
+    'location = /build-manifest.json',
+    'location = /artifact-compatibility.json',
+    'location = /modules/sw-build-cache.js',
+    'location = /sw.js',
+    'location ~ ^/platform-api/v1/verses(?:/[1-9][0-9]*)?$',
+    'proxy_pass ${HOST_API_BASE}',
+    'proxy_pass_request_headers off',
+    'proxy_ssl_verify on',
+    'proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt',
+    'proxy_hide_header Set-Cookie',
+    'proxy_hide_header Location',
+    'add_header Cache-Control "no-store" always',
+  ]) {
+    if (!nginxConfig.includes(expectedSnippet)) {
+      fail(`Missing nginx config snippet: ${expectedSnippet}`);
+    }
+  }
+  for (const forbiddenSnippet of [
+    'proxy_pass $arg_url',
+    'proxy_set_header Origin',
+    'proxy_set_header Cookie',
+  ]) {
+    if (nginxConfig.includes(forbiddenSnippet)) {
+      fail(`Forbidden arbitrary proxy configuration: ${forbiddenSnippet}`);
+    }
   }
 
-  if (isLfsPointer) {
-    console.error(`Build asset is still a Git LFS pointer: ${file}`);
-    process.exit(1);
+  const proxyTargets = [...nginxConfig.matchAll(/proxy_pass\s+([^;]+);/g)].map(
+    (match) => match[1].trim()
+  );
+  if (
+    proxyTargets.length !== 1 ||
+    proxyTargets[0] !== '${HOST_API_BASE}'
+  ) {
+    fail('nginx may proxy only to the validated HOST_API_BASE template value');
   }
 
-  if (stat.size < 1024) {
-    console.error(`Build asset is unexpectedly small: ${file} (${stat.size} bytes)`);
-    process.exit(1);
+  const aliasStart = nginxConfig.indexOf(
+    'location ~ ^/platform-api/v1/verses(?:/[1-9][0-9]*)?$'
+  );
+  const aliasEnd = nginxConfig.indexOf('\n  # Extensionless unknown routes', aliasStart);
+  const aliasBlock = nginxConfig.slice(aliasStart, aliasEnd);
+  const forwardedHeaders = [
+    ...aliasBlock.matchAll(/proxy_set_header\s+([^\s;]+)\s+([^;]*);/g),
+  ]
+    .filter((match) => match[2].trim() !== '""')
+    .map((match) => match[1]);
+  if (
+    JSON.stringify(forwardedHeaders) !==
+    JSON.stringify(['Host', 'Accept', 'Authorization'])
+  ) {
+    fail('Platform API alias may forward only Host, Accept and Authorization');
   }
-}
+};
 
-const manifest = JSON.parse(
-  fs.readFileSync(path.join(root, 'public/plugin/manifest.json'), 'utf8')
-);
-
-if (manifest.id !== 'webgl-preview') {
-  console.error(`Unexpected manifest id: ${manifest.id}`);
-  process.exit(1);
-}
-
-if (manifest.entry?.frontend !== '/index.html') {
-  console.error(`Unexpected frontend entry: ${manifest.entry?.frontend}`);
-  process.exit(1);
-}
-
-if (manifest.entry?.runner !== '/embed.html') {
-  console.error(`Unexpected runner entry: ${manifest.entry?.runner}`);
-  process.exit(1);
-}
-
-const nginxConfig = fs.readFileSync(path.join(root, 'nginx.conf'), 'utf8');
-for (const expectedSnippet of [
-  'location = /health',
-  'location = /__xrugc_proxy__',
-  'proxy_pass $arg_url',
-  'location ~* \\.wasm\\.br$',
-  'Content-Encoding br',
-  'location = /index.html',
-  'location = /sw.js',
-]) {
-  if (!nginxConfig.includes(expectedSnippet)) {
-    console.error(`Missing nginx config snippet: ${expectedSnippet}`);
-    process.exit(1);
+const checkServiceWorker = () => {
+  const source = fs.readFileSync(path.join(root, 'public/sw.js'), 'utf8');
+  const cacheCore = fs.readFileSync(
+    path.join(root, 'public/modules/sw-build-cache.js'),
+    'utf8'
+  );
+  for (const expectedSnippet of [
+    'build-manifest.json',
+    'BUILD_CACHE_MAX_BYTES',
+    'SCENE_CACHE_MAX_BYTES',
+    'background-started',
+    'request.headers.has("range")',
+    'PLATFORM_API_ALIAS_SEGMENT',
+    'event.respondWith(fetch(event.request))',
+  ]) {
+    if (!source.includes(expectedSnippet)) {
+      fail(`Service worker is missing contract: ${expectedSnippet}`);
+    }
   }
-}
+  if (!source.includes('importScripts("modules/sw-build-cache.js")')) {
+    fail('Service worker must load the tested build-cache core');
+  }
+  if (!cacheCore.includes('BuildArtifactCoordinator')) {
+    fail('Service worker build-cache core is missing its coordinator');
+  }
+  for (const forbiddenSnippet of [
+    'ignoreSearch',
+    'findCompleteCachedResponse',
+    'buildRangeResponse',
+  ]) {
+    if (source.includes(forbiddenSnippet)) {
+      fail(`Service worker contains unsafe legacy cache behavior: ${forbiddenSnippet}`);
+    }
+  }
+};
 
-console.log('webgl-preview self-check passed');
+const checkBuildArtifacts = async () => {
+  const buildDir = path.join(root, 'public/Build');
+  const pointers = fs
+    .readdirSync(buildDir)
+    .map((name) => path.join(buildDir, name))
+    .filter((filePath) => fs.statSync(filePath).isFile())
+    .filter((filePath) => readLfsPointer(filePath));
+
+  await verifyBuildManifest({
+    rootDir: path.join(root, 'public'),
+    manifestPath: path.join(root, 'public/build-manifest.json'),
+    allowLfsMetadata: pointers.length > 0,
+  });
+  verifyArtifactCompatibility({ rootDir: path.join(root, 'public') });
+
+  if (pointers.length > 0) {
+    const dockerignore = fs.readFileSync(path.join(root, '.dockerignore'), 'utf8');
+    if (!dockerignore.split(/\r?\n/).includes('public/Build')) {
+      fail('public/Build must be excluded so LFS pointers cannot overwrite image assets');
+    }
+    console.warn(
+      `Source checkout contains ${pointers.length} Git LFS pointer(s); strict validation is enforced in the Docker final-verifier stage.`
+    );
+  }
+};
+
+const checkBaseImagePolicy = () => {
+  const reference = resolveBaseImage({
+    dockerfilePath: path.join(root, 'Dockerfile'),
+  });
+  if (!isPinnedImage(reference)) {
+    console.warn(
+      'Local base image is mutable; publishing CI requires WEBGL_PREVIEW_BASE_IMAGE=name@sha256:<digest>.'
+    );
+  }
+};
+
+const main = async () => {
+  checkRequiredFiles();
+  checkPluginManifest();
+  checkRuntimeConfig();
+  checkNetworkConfig();
+  checkServiceWorker();
+  await checkBuildArtifacts();
+  checkBaseImagePolicy();
+  console.log('webgl-preview self-check passed');
+};
+
+main().catch((error) => {
+  console.error(error.message);
+  process.exitCode = 1;
+});
