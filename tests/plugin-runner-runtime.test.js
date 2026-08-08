@@ -278,6 +278,62 @@ test('trusted handshake drives search, pagination, selection, and pre-run author
   assert.ok(frameUrl.searchParams.get('session'));
 });
 
+test('trusted legacy host can initialize without a handshake session', async () => {
+  const harness = await createPluginRunnerHarness({
+    onFetch(call) {
+      const url = new URL(call.url);
+      if (url.pathname === '/api/v1/verses') {
+        return listResponse([{ id: 41, name: 'Legacy Host Scene' }]);
+      }
+      throw new Error(`Unexpected fetch: ${call.url}`);
+    },
+  });
+
+  harness.window.dispatch('message', {
+    origin: harness.hostOrigin,
+    source: harness.parentWindow,
+    data: {
+      type: 'INIT',
+      id: 'legacy-init',
+      payload: { token: 'legacy-token' },
+    },
+  });
+
+  await harness.waitFor(
+    () => harness.api.state.scenes[0]?.id === 41,
+    'legacy host scene list'
+  );
+  assert.equal(harness.api.state.handshakeComplete, true);
+  assert.equal(harness.api.state.legacyHostHandshake, true);
+  assert.equal(listCalls(harness)[0].headers.authorization, 'Bearer legacy-token');
+
+  harness.window.dispatch('message', {
+    origin: harness.hostOrigin,
+    source: harness.parentWindow,
+    data: {
+      type: 'TOKEN_UPDATE',
+      id: 'legacy-token-update',
+      payload: { token: 'legacy-token-2' },
+    },
+  });
+  await harness.waitFor(
+    () => harness.api.state.token === 'legacy-token-2',
+    'legacy token update'
+  );
+
+  harness.window.dispatch('message', {
+    origin: 'https://attacker.example',
+    source: harness.parentWindow,
+    data: {
+      type: 'TOKEN_UPDATE',
+      id: 'untrusted-legacy-token-update',
+      payload: { token: 'stolen-token' },
+    },
+  });
+  await harness.flush();
+  assert.equal(harness.api.state.token, 'legacy-token-2');
+});
+
 test('parallel scene detail 401s share one trusted host token refresh and retry once', async () => {
   const expiredToken = jwtToken({ uid: 7, sessionId: 'session-before-refresh' });
   const refreshedToken = jwtToken({ uid: 7, sessionId: 'session-after-refresh' });
