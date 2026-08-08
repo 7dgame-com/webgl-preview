@@ -506,6 +506,7 @@ const state = {
   runtimeConfig: {},
   handshakeSession: "",
   handshakeComplete: false,
+  legacyHostHandshake: false,
   handshakeTimer: 0,
   handshakeReadyTimer: 0,
   hostOrigin: "",
@@ -1363,6 +1364,17 @@ function hasHandshakeSession(payload) {
   );
 }
 
+function acceptsHostHandshake(messageType, payload) {
+  const hasSession = Object.prototype.hasOwnProperty.call(
+    payload,
+    "handshakeSession"
+  );
+
+  if (hasSession) return hasHandshakeSession(payload);
+  if (messageType === "INIT") return !state.handshakeComplete;
+  return state.handshakeComplete && state.legacyHostHandshake;
+}
+
 function postToHost(message) {
   if (!state.hostOrigin || !window.parent || window.parent === window) return false;
   window.parent.postMessage(message, state.hostOrigin);
@@ -1507,12 +1519,16 @@ function handleHostMessage(event) {
     return;
   }
 
-  if (!hasHandshakeSession(payload)) return;
+  if (!acceptsHostHandshake(message.type, payload)) return;
 
   if (message.type === "INIT") {
     if (state.handshakeComplete && event.source !== state.hostSource) return;
     const wasInitialized = state.handshakeComplete;
     state.handshakeComplete = true;
+    state.legacyHostHandshake = !Object.prototype.hasOwnProperty.call(
+      payload,
+      "handshakeSession"
+    );
     state.hostSource = event.source;
     stopPluginReadyRetries();
     if (state.handshakeTimer) {
