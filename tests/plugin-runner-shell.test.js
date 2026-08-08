@@ -470,6 +470,12 @@ test('production token is memory-only and messages are session bound', () => {
   assert.match(source, /hasSameJwtPrincipal\(state\.token, nextToken\)/);
   assert.match(source, /if \(nextToken === state\.token\) return/);
   assert.match(source, /payload\.handshakeSession === state\.handshakeSession/);
+  assert.match(source, /messageType === "INIT"\) return !state\.handshakeComplete/);
+  assert.match(source, /state\.handshakeComplete && state\.legacyHostHandshake/);
+  assert.match(
+    source,
+    /state\.legacyHostHandshake = !Object\.prototype\.hasOwnProperty\.call\(/
+  );
   assert.match(source, /event\.source === window\.parent/);
   assert.match(source, /event\.origin === state\.hostOrigin/);
   assert.match(source, /event\.source !== elements\.frame\.contentWindow/);
