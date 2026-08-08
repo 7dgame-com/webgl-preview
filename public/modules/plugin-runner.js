@@ -507,6 +507,7 @@ const state = {
   handshakeSession: "",
   handshakeComplete: false,
   handshakeTimer: 0,
+  handshakeReadyTimer: 0,
   hostOrigin: "",
   hostSource: null,
   tokenRefreshWaiter: null,
@@ -1373,15 +1374,26 @@ function postPluginReady() {
     !state.hostOrigin ||
     !window.parent ||
     window.parent === window ||
-    window.__PLUGIN_READY_SENT__
+    state.handshakeComplete
   ) return;
 
-  window.__PLUGIN_READY_SENT__ = true;
   postToHost({
     type: "PLUGIN_READY",
     id: genId(`${PLUGIN_ID}-ready`),
     payload: { handshakeSession: state.handshakeSession },
   });
+}
+
+function stopPluginReadyRetries() {
+  if (!state.handshakeReadyTimer) return;
+  window.clearInterval(state.handshakeReadyTimer);
+  state.handshakeReadyTimer = 0;
+}
+
+function startPluginReadyRetries() {
+  stopPluginReadyRetries();
+  postPluginReady();
+  state.handshakeReadyTimer = window.setInterval(postPluginReady, 500);
 }
 
 function settleTokenRefreshWaiter(token = "", updateToken = false) {
@@ -1502,6 +1514,7 @@ function handleHostMessage(event) {
     const wasInitialized = state.handshakeComplete;
     state.handshakeComplete = true;
     state.hostSource = event.source;
+    stopPluginReadyRetries();
     if (state.handshakeTimer) {
       window.clearTimeout(state.handshakeTimer);
       state.handshakeTimer = 0;
@@ -3018,6 +3031,7 @@ async function init() {
 
   state.handshakeTimer = window.setTimeout(() => {
     if (state.handshakeComplete) return;
+    stopPluginReadyRetries();
     state.sceneListStatus = "handshake-error";
     showRunError(
       new PreviewError("WGP-HANDSHAKE-TIMEOUT", t("handshakeFailed"), {
@@ -3026,10 +3040,15 @@ async function init() {
     );
   }, getHandshakeTimeoutMs());
   window.addEventListener("message", handleHostMessage);
-  postPluginReady();
+  startPluginReadyRetries();
 }
 
 window.addEventListener("pagehide", () => {
+  stopPluginReadyRetries();
+  if (state.handshakeTimer) {
+    window.clearTimeout(state.handshakeTimer);
+    state.handshakeTimer = 0;
+  }
   state.identityGeneration += 1;
   clearIdentityState();
   unloadUnityFrame();
