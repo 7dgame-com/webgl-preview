@@ -430,6 +430,10 @@ test('asset URL policy preserves signed query bytes and rejects unsafe origins',
 test('static production runtime config contains HTTPS-only host and API origins', () => {
   for (const key of ['trustedHostOrigins', 'platformApiOrigins']) {
     assert.ok(Array.isArray(runtimeConfig[key]) && runtimeConfig[key].length > 0);
+    assert.ok(
+      runtimeConfig[key].includes('https://d.xrugc.com'),
+      `${key} must include the production workbench origin`
+    );
     for (const origin of runtimeConfig[key]) {
       assert.match(origin, /^https:\/\//, `${key}: ${origin}`);
       assert.doesNotMatch(origin, /^http:\/\//, `${key}: ${origin}`);
