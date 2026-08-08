@@ -58,7 +58,10 @@ progress, error and dispose messages.
   "description": "从我的场景中选择并使用 Unity WebGL 运行 XRUGC 场景",
   "url": "https://webgl-preview.plugins.xrugc.com/",
   "allowedOrigin": "https://webgl-preview.plugins.xrugc.com",
-  "allowedHostOrigins": ["https://d.dev.xrugc.com"],
+  "allowedHostOrigins": [
+    "https://d.xrugc.com",
+    "https://d.dev.xrugc.com"
+  ],
   "group": "builtins",
   "icon": "VideoPlay",
   "enabled": true,

@@ -5,10 +5,12 @@
   "deploymentBasePath": "./",
   "trustedHostOrigins": [
     "https://xrugc.com",
+    "https://d.xrugc.com",
     "https://d.dev.xrugc.com"
   ],
   "platformApiOrigins": [
     "https://xrugc.com",
+    "https://d.xrugc.com",
     "https://d.dev.xrugc.com"
   ],
   "platformApiAlias": "./platform-api",
