@@ -187,6 +187,13 @@ test('trusted handshake drives search, pagination, selection, and pre-run author
   assert.equal(ready.type, 'PLUGIN_READY');
   assert.equal(platformCalls(harness).length, 0, 'no API request before INIT');
 
+  assert.equal(await harness.scheduler.runInterval(500), 1);
+  assert.equal(
+    harness.parentMessages.filter(({ message }) => message.type === 'PLUGIN_READY').length,
+    2,
+    'READY is retried until the host is listening'
+  );
+
   harness.window.dispatch('message', {
     origin: harness.hostOrigin,
     source: harness.parentWindow,
@@ -201,6 +208,7 @@ test('trusted handshake drives search, pagination, selection, and pre-run author
 
   await initialize(harness);
   assert.equal(harness.api.state.handshakeComplete, true);
+  assert.equal(harness.api.state.handshakeReadyTimer, 0);
   assert.equal(harness.api.state.lifecycle, 'ready');
   assert.equal(harness.api.state.scenes[0].name, 'Alpha');
   assert.equal(listCalls(harness)[0].headers.authorization, 'Bearer token-a');

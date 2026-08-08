@@ -269,6 +269,17 @@ class FakeScheduler {
     }
     return selected.length;
   }
+
+  async runInterval(delay) {
+    const selected = [...this.tasks.values()].filter(
+      (task) => task.interval && task.delay === delay
+    );
+    for (const task of selected) {
+      task.callback(...task.args);
+      await flushMicrotasks();
+    }
+    return selected.length;
+  }
 }
 
 function jsonResponse(status, data, headers = {}) {

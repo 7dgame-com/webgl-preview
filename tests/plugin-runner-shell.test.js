@@ -513,8 +513,15 @@ test('runtime configuration precedes READY and terminal errors are stable', () =
   const initBlock = source.slice(initStart);
   assert.ok(initBlock.indexOf('await loadRuntimeConfig()') > 0);
   assert.ok(
-    initBlock.indexOf('await loadRuntimeConfig()') < initBlock.indexOf('postPluginReady()')
+    initBlock.indexOf('await loadRuntimeConfig()') < initBlock.indexOf('startPluginReadyRetries()')
   );
+  assert.match(source, /state\.handshakeReadyTimer = window\.setInterval\(postPluginReady, 500\)/);
+  assert.match(source, /if \(state\.handshakeComplete\) return;/);
+  assert.match(
+    source,
+    /state\.handshakeComplete = true;[\s\S]*?stopPluginReadyRetries\(\);/
+  );
+  assert.doesNotMatch(source, /__PLUGIN_READY_SENT__/);
   assert.match(source, /unity-web-preview-error/);
   assert.match(source, /WGP-HANDSHAKE-TIMEOUT/);
   assert.match(source, /WGP-SCENE-LIST-401/);
