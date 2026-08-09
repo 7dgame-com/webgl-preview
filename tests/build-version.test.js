@@ -21,6 +21,10 @@ function makeShellFixture() {
     path.join(rootDir, 'index.html')
   );
   fs.copyFileSync(
+    path.join(sourceRoot, 'embed.html'),
+    path.join(rootDir, 'embed.html')
+  );
+  fs.copyFileSync(
     path.join(sourceRoot, 'modules', 'plugin-runner.js'),
     path.join(rootDir, 'modules', 'plugin-runner.js')
   );
@@ -45,9 +49,12 @@ test('build version injection updates UI text and both shell cache keys', (t) =>
     path.join(rootDir, 'modules', 'plugin-runner.js'),
     'utf8'
   );
+  const embed = fs.readFileSync(path.join(rootDir, 'embed.html'), 'utf8');
   assert.equal(index.includes(BUILD_VERSION_MARKER), false);
+  assert.equal(embed.includes(BUILD_VERSION_MARKER), false);
   assert.equal(runner.includes(BUILD_VERSION_MARKER), false);
   assert.equal((index.match(/\?v=2026\.08\.01-1842/g) || []).length, 2);
+  assert.equal((embed.match(/\?v=2026\.08\.01-1842/g) || []).length, 1);
   assert.match(
     runner,
     /^const WEBGL_PREVIEW_BUILD_VERSION = "2026\.08\.01-1842";$/m

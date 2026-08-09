@@ -15,6 +15,7 @@ const required = [
   'public/runtime-config.json',
   'public/build-manifest.json',
   'public/artifact-compatibility.json',
+  'public/modules/embed-parent-protocol.js',
   'public/modules/sw-build-cache.js',
   'scripts/dev-server.js',
   'scripts/container-smoke.js',
@@ -23,6 +24,7 @@ const required = [
   'scripts/check-base-image.js',
   'scripts/check-artifact-compatibility.js',
   'scripts/inject-build-version.js',
+  'scripts/render-runtime-config.sh',
   'scripts/validate-host-api-base.sh',
   'scripts/subpath-container-smoke.js',
   'tests/build-manifest.test.js',
@@ -68,6 +70,7 @@ for (const snippet of [
   'NGINX_ENVSUBST_FILTER="^HOST_API_BASE$"',
   '/etc/nginx/templates/default.conf.template',
   '/docker-entrypoint.d/15-validate-host-api-base.sh',
+  '/docker-entrypoint.d/16-render-runtime-config.sh',
 ]) {
   if (!dockerfile.includes(snippet)) {
     console.error(`Dockerfile is missing delivery gate: ${snippet}`);

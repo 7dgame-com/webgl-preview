@@ -29,6 +29,7 @@
         </div>
       </div>
     </div>
+    <script src="./modules/embed-parent-protocol.js?v=__WEBGL_PREVIEW_BUILD_VERSION__"></script>
     <script>
       var canvas = document.querySelector("#unity-canvas");
       var loadingShield = document.querySelector("#web-preview-loading-shield");
@@ -42,31 +43,25 @@
       var webPreviewRuntimeProgressActual = 0;
       var webPreviewRuntimeProgressDisplayed = 0;
       var webPreviewParams = new URLSearchParams(window.location.search);
-      var webPreviewSession = webPreviewParams.get("session") || "";
-      var webPreviewParentOrigin = window.location.origin;
+      var webPreviewParentProtocol = window.XRUGCEmbedParentProtocol.createEmbedParentProtocol({
+        embedded: webPreviewEmbedded,
+        parentWindow: window.parent,
+        parentOrigin: window.location.origin,
+        searchParams: webPreviewParams
+      });
+      var webPreviewSession = webPreviewParentProtocol.session;
+      var webPreviewParentOrigin = webPreviewParentProtocol.parentOrigin;
       var webPreviewUnityInstance = null;
       var webPreviewDisposed = false;
       var webPreviewBridgeMessageHandler = null;
       var webPreviewLoadingI18n = null;
 
       function postWebPreviewParent(message) {
-        if (!webPreviewEmbedded || !webPreviewSession) {
-          return;
-        }
-        message.session = webPreviewSession;
-        window.parent.postMessage(message, webPreviewParentOrigin);
+        return webPreviewParentProtocol.post(message);
       }
 
       function isTrustedWebPreviewParentMessage(event, message) {
-        return !!(
-          webPreviewEmbedded &&
-          webPreviewSession &&
-          event.source === window.parent &&
-          event.origin === webPreviewParentOrigin &&
-          message &&
-          typeof message === "object" &&
-          message.session === webPreviewSession
-        );
+        return webPreviewParentProtocol.accept(event, message);
       }
       (function installWebPreviewConsoleFilter() {
         var verbose = /^(1|true|debug|verbose)$/i.test(
@@ -425,8 +420,8 @@
       window.addEventListener("message", function(event) {
         var message = event.data || {};
         if (
-          isTrustedWebPreviewParentMessage(event, message) &&
-          message.type === "webgl-preview-dispose"
+          message.type === "webgl-preview-dispose" &&
+          isTrustedWebPreviewParentMessage(event, message)
         ) {
           disposeWebPreview();
         }

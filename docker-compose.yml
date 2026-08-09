@@ -11,6 +11,8 @@ services:
       - '127.0.0.1:3006:80'
     environment:
       HOST_API_BASE: ${HOST_API_BASE:-https://d.dev.xrugc.com}
+      REQUIRE_TRUSTED_HOST_ORIGINS: ${REQUIRE_TRUSTED_HOST_ORIGINS:-1}
+      TRUSTED_HOST_ORIGINS_JSON: '${WEBGL_PREVIEW_TRUSTED_HOST_ORIGINS_JSON:-["https://d.dev.xrugc.com"]}'
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1/api/health"]
       interval: 30s

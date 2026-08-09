@@ -7,13 +7,24 @@ const embed = fs.readFileSync(
   path.resolve(__dirname, '..', 'public/embed.html'),
   'utf8'
 );
+const parentProtocol = fs.readFileSync(
+  path.resolve(__dirname, '..', 'public/modules/embed-parent-protocol.js'),
+  'utf8'
+);
 
-test('runner messages are source, origin, and run-session bound', () => {
-  assert.match(embed, /event\.source === window\.parent/);
-  assert.match(embed, /event\.origin === webPreviewParentOrigin/);
-  assert.match(embed, /message\.session === webPreviewSession/);
-  assert.match(embed, /window\.parent\.postMessage\(message, webPreviewParentOrigin\)/);
-  assert.doesNotMatch(embed, /postMessage\([^;]+,\s*["']\*["']\s*\)/s);
+test('runner messages use the source, origin, and epoch-bound transition protocol', () => {
+  assert.match(embed, /embed-parent-protocol\.js\?v=__WEBGL_PREVIEW_BUILD_VERSION__/);
+  assert.match(embed, /createEmbedParentProtocol/);
+  assert.match(embed, /parentWindow: window\.parent/);
+  assert.match(embed, /parentOrigin: window\.location\.origin/);
+  assert.match(embed, /webPreviewParentProtocol\.accept\(event, message\)/);
+  assert.match(parentProtocol, /event\.source === parentWindow/);
+  assert.match(parentProtocol, /event\.origin === parentOrigin/);
+  assert.match(parentProtocol, /message\.session === binding\.session/);
+  assert.doesNotMatch(
+    `${embed}\n${parentProtocol}`,
+    /postMessage\([^;]+,\s*["']\*["']\s*\)/s
+  );
 });
 
 test('runner does not rewrite scene assets through a generic proxy', () => {

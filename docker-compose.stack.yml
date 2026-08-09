@@ -6,6 +6,8 @@ services:
       - internal
     environment:
       - HOST_API_BASE=https://d.dev.xrugc.com
+      - REQUIRE_TRUSTED_HOST_ORIGINS=1
+      - TRUSTED_HOST_ORIGINS_JSON=${WEBGL_PREVIEW_D_TRUSTED_HOST_ORIGINS_JSON:?Set an exact JSON array from the deployment inventory}
     labels:
       - traefik.enable=true
       - traefik.docker.network=proxy
@@ -39,6 +41,8 @@ services:
       - internal
     environment:
       - HOST_API_BASE=https://xrugc.com
+      - REQUIRE_TRUSTED_HOST_ORIGINS=1
+      - TRUSTED_HOST_ORIGINS_JSON=${WEBGL_PREVIEW_TRUSTED_HOST_ORIGINS_JSON:?Set an exact JSON array from the deployment inventory}
     labels:
       - traefik.enable=true
       - traefik.docker.network=proxy

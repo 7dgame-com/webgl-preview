@@ -56,6 +56,7 @@ test('container smoke inspects final routes and every manifest artifact', () => 
   assert.match(smoke, /assertSecurityHeaders/);
   assert.match(smoke, /content-range/);
   assert.match(smoke, /\/embed\.html/);
+  assert.match(smoke, /\/modules\/embed-parent-protocol\.js/);
   assert.match(smoke, /\/sw\.js/);
   assert.match(smoke, /\/modules\/sw-build-cache\.js/);
   assert.match(smoke, /content-encoding/);

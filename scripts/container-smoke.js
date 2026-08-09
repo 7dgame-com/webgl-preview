@@ -116,6 +116,17 @@ async function main(baseUrl = defaultBaseUrl) {
   assert.match(embed.headers.get('cache-control') || '', /no-cache/i);
   assert.match(embed.headers.get('content-type') || '', /^text\/html/);
 
+  const embedParentProtocol = await expectStatus(
+    baseUrl,
+    '/modules/embed-parent-protocol.js',
+    200
+  );
+  assertSecurityHeaders(embedParentProtocol, 'embed parent protocol');
+  assert.match(
+    embedParentProtocol.headers.get('content-type') || '',
+    /^(application|text)\/javascript/
+  );
+
   const serviceWorker = await expectStatus(baseUrl, '/sw.js', 200);
   assertSecurityHeaders(serviceWorker, 'service worker');
   assert.match(serviceWorker.headers.get('cache-control') || '', /no-cache/i);
