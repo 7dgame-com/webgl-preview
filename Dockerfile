@@ -53,11 +53,14 @@ LABEL io.7dgame.webgl-preview.build-version="${WEBGL_PREVIEW_BUILD_VERSION}"
 COPY --from=shell-builder /work/public /usr/share/nginx/html
 COPY --from=manifest-builder /work/public/build-manifest.json \
   /usr/share/nginx/html/build-manifest.json
+COPY public/runtime-config.json /etc/webgl-preview/runtime-config.json
 COPY nginx.conf /etc/nginx/templates/default.conf.template
 COPY nginx-security-headers.conf \
   /etc/nginx/snippets/webgl-preview-security-headers.conf
 COPY --chmod=755 scripts/validate-host-api-base.sh \
   /docker-entrypoint.d/15-validate-host-api-base.sh
+COPY --chmod=755 scripts/render-runtime-config.sh \
+  /docker-entrypoint.d/16-render-runtime-config.sh
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget --quiet --tries=1 --spider http://127.0.0.1/api/health || exit 1
