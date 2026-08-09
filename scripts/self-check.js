@@ -19,6 +19,7 @@ const required = [
   'nginx-security-headers.conf',
   'public/index.html',
   'public/embed.html',
+  'public/modules/embed-parent-protocol.js',
   'public/modules/plugin-runner.js',
   'public/modules/sw-build-cache.js',
   'public/styles/plugin-runner.css',
@@ -30,6 +31,7 @@ const required = [
   'scripts/build-manifest.js',
   'scripts/check-base-image.js',
   'scripts/check-artifact-compatibility.js',
+  'scripts/render-runtime-config.sh',
 ];
 
 const fail = (message) => {
@@ -85,6 +87,30 @@ const checkRuntimeConfig = () => {
   }
   if (config.platformApiAlias !== './platform-api') {
     fail('Production runtime config must use the fixed same-origin Platform API alias');
+  }
+};
+
+const checkRuntimeConfigDelivery = () => {
+  const dockerfile = fs.readFileSync(path.join(root, 'Dockerfile'), 'utf8');
+  const stack = fs.readFileSync(
+    path.join(root, 'docker-compose.stack.yml'),
+    'utf8'
+  );
+  for (const expected of [
+    '/etc/webgl-preview/runtime-config.json',
+    '/docker-entrypoint.d/16-render-runtime-config.sh',
+  ]) {
+    if (!dockerfile.includes(expected)) {
+      fail(`Missing runtime config delivery: ${expected}`);
+    }
+  }
+  for (const expected of [
+    'REQUIRE_TRUSTED_HOST_ORIGINS=1',
+    'WEBGL_PREVIEW_TRUSTED_HOST_ORIGINS_JSON:?',
+  ]) {
+    if (!stack.includes(expected)) {
+      fail(`Production stack must fail closed on: ${expected}`);
+    }
   }
 };
 
@@ -227,6 +253,7 @@ const main = async () => {
   checkRequiredFiles();
   checkPluginManifest();
   checkRuntimeConfig();
+  checkRuntimeConfigDelivery();
   checkNetworkConfig();
   checkServiceWorker();
   await checkBuildArtifacts();
