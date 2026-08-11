@@ -13,6 +13,21 @@ const parentProtocol = fs.readFileSync(
 );
 
 test('runner messages use the source, origin, and epoch-bound transition protocol', () => {
+  const dispatcherStart = embed.indexOf('function handleWebPreviewParentMessage(event)');
+  const dispatcherEnd = embed.indexOf(
+    'window.addEventListener("message", handleWebPreviewParentMessage)',
+    dispatcherStart
+  );
+  const dispatcher = embed.slice(dispatcherStart, dispatcherEnd);
+  const bridgeStart = embed.indexOf('webPreviewBridgeDispatch = function(data)');
+  const readyPost = embed.indexOf(
+    'type: "unity-web-preview-ready"',
+    bridgeStart
+  );
+  const forwardStart = embed.indexOf('function forwardSceneJson(json, options)');
+  const forwardEnd = embed.indexOf('function sendSceneJson(payload)', forwardStart);
+  const forwardScene = embed.slice(forwardStart, forwardEnd);
+
   assert.match(embed, /embed-parent-protocol\.js\?v=__WEBGL_PREVIEW_BUILD_VERSION__/);
   assert.match(embed, /createEmbedParentProtocol/);
   assert.match(embed, /parentWindow: window\.parent/);
@@ -21,6 +36,31 @@ test('runner messages use the source, origin, and epoch-bound transition protoco
   assert.match(parentProtocol, /event\.source === parentWindow/);
   assert.match(parentProtocol, /event\.origin === parentOrigin/);
   assert.match(parentProtocol, /message\.session === binding\.session/);
+  assert.equal(
+    (embed.match(/window\.addEventListener\(["']message["']/g) || []).length,
+    1,
+    'every parent MessageEvent must pass through one stateful dispatcher'
+  );
+  assert.equal(
+    (dispatcher.match(/webPreviewParentProtocol\.accept\(event, message\)/g) || []).length,
+    1,
+    'the dispatcher must consume each trusted message exactly once'
+  );
+  assert.ok(dispatcherStart >= 0 && dispatcherEnd > dispatcherStart);
+  assert.match(dispatcher, /message\.type === "webgl-preview-dispose"/);
+  assert.match(dispatcher, /webPreviewBridgeDispatch\(message\)/);
+  assert.ok(bridgeStart >= 0 && readyPost > bridgeStart);
+  assert.ok(forwardStart >= 0 && forwardEnd > forwardStart);
+  const sendMessage = forwardScene.indexOf('unityInstance.SendMessage');
+  const sceneForwarded = forwardScene.indexOf(
+    'type: "unity-web-preview-scene-forwarded"'
+  );
+  assert.ok(sendMessage >= 0);
+  assert.ok(sceneForwarded >= 0);
+  assert.ok(
+    sendMessage < sceneForwarded,
+    'Unity must receive the payload before the parent sees the forwarded ack'
+  );
   assert.doesNotMatch(
     `${embed}\n${parentProtocol}`,
     /postMessage\([^;]+,\s*["']\*["']\s*\)/s
