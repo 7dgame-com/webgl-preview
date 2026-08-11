@@ -53,15 +53,11 @@
       var webPreviewParentOrigin = webPreviewParentProtocol.parentOrigin;
       var webPreviewUnityInstance = null;
       var webPreviewDisposed = false;
-      var webPreviewBridgeMessageHandler = null;
+      var webPreviewBridgeDispatch = null;
       var webPreviewLoadingI18n = null;
 
       function postWebPreviewParent(message) {
         return webPreviewParentProtocol.post(message);
-      }
-
-      function isTrustedWebPreviewParentMessage(event, message) {
-        return webPreviewParentProtocol.accept(event, message);
       }
       (function installWebPreviewConsoleFilter() {
         var verbose = /^(1|true|debug|verbose)$/i.test(
@@ -301,9 +297,9 @@
         return true;
       }
 
-      window.addEventListener("message", function(event) {
+      function handleWebPreviewParentMessage(event) {
         var message = event.data || {};
-        if (!isTrustedWebPreviewParentMessage(event, message)) {
+        if (!webPreviewParentProtocol.accept(event, message)) {
           return;
         }
         if (
@@ -318,8 +314,20 @@
           message.type === "I18N_CHANGE"
         ) {
           updateWebPreviewLocale(extractWebPreviewLocaleCandidate(message));
+          return;
         }
-      });
+
+        if (message.type === "webgl-preview-dispose") {
+          disposeWebPreview();
+          return;
+        }
+
+        if (webPreviewBridgeDispatch) {
+          webPreviewBridgeDispatch(message);
+        }
+      }
+
+      window.addEventListener("message", handleWebPreviewParentMessage);
 
       function estimateWebPreviewRuntimeProgress() {
         if (!webPreviewRuntimeProgressStartedAt) {
@@ -394,10 +402,7 @@
             type: "cancel-webgl-preview-cache"
           });
         }
-        if (webPreviewBridgeMessageHandler) {
-          window.removeEventListener("message", webPreviewBridgeMessageHandler);
-          webPreviewBridgeMessageHandler = null;
-        }
+        webPreviewBridgeDispatch = null;
 
         var instance = webPreviewUnityInstance;
         webPreviewUnityInstance = null;
@@ -416,16 +421,6 @@
           });
         });
       }
-
-      window.addEventListener("message", function(event) {
-        var message = event.data || {};
-        if (
-          message.type === "webgl-preview-dispose" &&
-          isTrustedWebPreviewParentMessage(event, message)
-        ) {
-          disposeWebPreview();
-        }
-      });
 
       // Shows a temporary message banner/ribbon for a few seconds, or
       // a permanent error message on top of the canvas if type=='error'.
@@ -989,12 +984,7 @@
         };
 
         window.unityWebPreview = bridge;
-        webPreviewBridgeMessageHandler = function(event) {
-          var data = event.data || {};
-          if (!isTrustedWebPreviewParentMessage(event, data)) {
-            return;
-          }
-
+        webPreviewBridgeDispatch = function(data) {
           if (data.type === "load-scene-json" || data.type === "xrugc-load-scene-json") {
             sendSceneJson(getMessagePayload(data));
           }
@@ -1007,7 +997,6 @@
             bridge.setCameraMode(data.mode || "orbit");
           }
         };
-        window.addEventListener("message", webPreviewBridgeMessageHandler);
 
         var initialScenePayload = readInitialScenePayload();
         if (initialScenePayload !== null) {

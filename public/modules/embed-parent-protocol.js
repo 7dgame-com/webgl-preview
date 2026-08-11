@@ -24,6 +24,17 @@
     "unity-web-preview-ping",
     "unity-web-preview-camera-mode",
   ]);
+  const LOCALE_INBOUND_TYPES = new Set([
+    "webgl-preview-locale-change",
+    "LANGUAGE_CHANGE",
+    "LOCALE_CHANGE",
+    "SET_LANGUAGE",
+    "SET_LOCALE",
+    "CHANGE_LANGUAGE",
+    "CHANGE_LOCALE",
+    "LANG_CHANGE",
+    "I18N_CHANGE",
+  ]);
   const SCENE_INBOUND_TYPES = new Set([
     "load-scene-json",
     "xrugc-load-scene-json",
@@ -120,6 +131,7 @@
         phase = "closing";
         return true;
       }
+      if (LOCALE_INBOUND_TYPES.has(message.type)) return true;
       if (!readySent) return false;
       if (SCENE_INBOUND_TYPES.has(message.type)) {
         if (sceneAccepted) return false;

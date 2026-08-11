@@ -9,6 +9,17 @@ const {
 const PARENT_ORIGIN = 'https://d.xiading.hxgxonline.com';
 const SESSION_A = 'unity-preview-11111111-1111-4111-8111-111111111111';
 const SESSION_B = 'unity-preview-22222222-2222-4222-8222-222222222222';
+const LOCALE_TYPES = [
+  'webgl-preview-locale-change',
+  'LANGUAGE_CHANGE',
+  'LOCALE_CHANGE',
+  'SET_LANGUAGE',
+  'SET_LOCALE',
+  'CHANGE_LANGUAGE',
+  'CHANGE_LOCALE',
+  'LANG_CHANGE',
+  'I18N_CHANGE',
+];
 
 function createHarness(query = '', overrides = {}) {
   const parentWindow = overrides.parentWindow || {};
@@ -164,6 +175,76 @@ test('old session replays cannot cross iframe epochs', () => {
   const current = { type: 'xrugc-load-scene-json', session: SESSION_B };
   assert.equal(second.protocol.accept(second.event(stale), stale), false);
   assert.equal(second.protocol.accept(second.event(current), current), true);
+});
+
+test('locale messages are repeatable and never consume the scene epoch', () => {
+  const harness = createHarness(`session=${encodeURIComponent(SESSION_A)}`);
+  const scene = {
+    type: 'load-scene-json',
+    session: SESSION_A,
+    payload: { id: 408 },
+  };
+
+  for (const type of LOCALE_TYPES) {
+    const locale = { type, session: SESSION_A, locale: 'zh-TW' };
+    assert.equal(
+      harness.protocol.accept(harness.event(locale), locale),
+      true,
+      `${type} is accepted before Unity is ready`
+    );
+  }
+
+  const locale = {
+    type: 'webgl-preview-locale-change',
+    session: SESSION_A,
+    locale: 'zh-TW',
+  };
+  assert.equal(
+    harness.protocol.accept(harness.event(locale, { source: {} }), locale),
+    false
+  );
+  assert.equal(
+    harness.protocol.accept(
+      harness.event(locale, { origin: 'https://attacker.example' }),
+      locale
+    ),
+    false
+  );
+  const staleLocale = { ...locale, session: SESSION_B };
+  assert.equal(
+    harness.protocol.accept(harness.event(staleLocale), staleLocale),
+    false
+  );
+  assert.equal(harness.protocol.accept(harness.event(scene), scene), false);
+
+  markReady(harness);
+  for (const type of LOCALE_TYPES) {
+    const repeatedLocale = { type, session: SESSION_A, locale: 'en' };
+    assert.equal(
+      harness.protocol.accept(harness.event(repeatedLocale), repeatedLocale),
+      true,
+      `${type} remains repeatable after Unity is ready`
+    );
+  }
+  assert.equal(harness.protocol.accept(harness.event(scene), scene), true);
+  assert.equal(harness.protocol.accept(harness.event(scene), scene), false);
+});
+
+test('dispose can close the epoch before Unity becomes ready', () => {
+  const harness = createHarness(`session=${encodeURIComponent(SESSION_A)}`);
+  const dispose = { type: 'webgl-preview-dispose', session: SESSION_A };
+
+  assert.equal(harness.protocol.accept(harness.event(dispose), dispose), true);
+  assert.equal(harness.protocol.phase, 'closing');
+  assert.equal(
+    harness.protocol.post({ type: 'webgl-preview-loading', visible: false }),
+    false
+  );
+  assert.equal(
+    harness.protocol.post({ type: 'webgl-preview-disposed' }),
+    true
+  );
+  assert.equal(harness.protocol.phase, 'closed');
 });
 
 test('dispose is terminal and closes the epoch against later messages', () => {
