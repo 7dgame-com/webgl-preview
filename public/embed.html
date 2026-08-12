@@ -672,7 +672,11 @@
             );
           }
 
-          if (message.status === "complete" || message.status === "cancelled") {
+          if (
+            message.status === "complete" ||
+            message.status === "cancelled" ||
+            message.status === "incomplete"
+          ) {
             webPreviewCacheActive = false;
             settle();
             if (webPreviewUnityReady) {
