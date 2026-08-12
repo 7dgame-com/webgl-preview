@@ -59,8 +59,15 @@ progress, error and dispose messages.
   "url": "https://webgl-preview.plugins.xrugc.com/",
   "allowedOrigin": "https://webgl-preview.plugins.xrugc.com",
   "allowedHostOrigins": [
+    "https://xrugc.com",
     "https://d.xrugc.com",
-    "https://d.dev.xrugc.com"
+    "https://d.dev.xrugc.com",
+    "https://d.ar-creator.cn",
+    "https://d.xiading.hxgxonline.com",
+    "https://d.mrpp.com",
+    "https://d.xiading.cc",
+    "https://bujiaban.com",
+    "https://www.bujiaban.com"
   ],
   "group": "builtins",
   "icon": "VideoPlay",
@@ -78,6 +85,22 @@ strip-prefix `/webgl-preview/` route. The container requires one deployment
 value: `HOST_API_BASE=https://d.dev.xrugc.com` on develop and
 `HOST_API_BASE=https://xrugc.com` on production. It must be an exact,
 credential-free HTTPS origin without a path, query or fragment.
+
+Every production Host must appear as an exact, credential-free HTTPS origin in
+both the platform registration's `allowedHostOrigins` and the Preview Shell's
+`runtime-config.json.trustedHostOrigins`. Add bare and `www` origins separately
+when both serve the platform; never replace this list with a wildcard.
+
+Production deployments set the reviewed inventory explicitly and fail closed:
+
+```text
+REQUIRE_TRUSTED_HOST_ORIGINS=1
+TRUSTED_HOST_ORIGINS_JSON=["https://xrugc.com","https://d.xrugc.com","https://d.dev.xrugc.com","https://d.ar-creator.cn","https://d.xiading.hxgxonline.com","https://d.mrpp.com","https://d.xiading.cc","https://bujiaban.com","https://www.bujiaban.com"]
+```
+
+`TRUSTED_HOST_ORIGINS_JSON` replaces the image default rather than appending to
+it, so every active Host must remain in the deployment value during an update.
+Do not add inactive, unreachable or homepage-only domains speculatively.
 
 An explicit external `apiBase` remains a compatibility fallback only when the
 same-origin alias is absent, and is accepted only when its exact origin appears
