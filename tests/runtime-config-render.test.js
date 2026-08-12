@@ -8,6 +8,17 @@ const { test } = require('node:test');
 const root = path.resolve(__dirname, '..');
 const script = path.join(root, 'scripts/render-runtime-config.sh');
 const sourceConfig = path.join(root, 'public/runtime-config.json');
+const productionHostOrigins = [
+  'https://xrugc.com',
+  'https://d.xrugc.com',
+  'https://d.dev.xrugc.com',
+  'https://d.ar-creator.cn',
+  'https://d.xiading.hxgxonline.com',
+  'https://d.mrpp.com',
+  'https://d.xiading.cc',
+  'https://bujiaban.com',
+  'https://www.bujiaban.com',
+];
 
 function render(t, env = {}) {
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'webgl-runtime-config-'));
@@ -65,6 +76,7 @@ test('optional local rendering preserves the reviewed default inventory', (t) =>
     source.trustedHostOrigins.includes('https://d.xrugc.com'),
     'the current production host must not be dropped by promotion'
   );
+  assert.deepEqual(source.trustedHostOrigins, productionHostOrigins);
 });
 
 test('runtime inventory rejects wildcard, non-canonical, duplicate, and URL-shaped entries', (t) => {

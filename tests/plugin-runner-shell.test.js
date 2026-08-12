@@ -428,6 +428,18 @@ test('asset URL policy preserves signed query bytes and rejects unsafe origins',
 });
 
 test('static production runtime config contains HTTPS-only host and API origins', () => {
+  const productionHostOrigins = [
+    'https://xrugc.com',
+    'https://d.xrugc.com',
+    'https://d.dev.xrugc.com',
+    'https://d.ar-creator.cn',
+    'https://d.xiading.hxgxonline.com',
+    'https://d.mrpp.com',
+    'https://d.xiading.cc',
+    'https://bujiaban.com',
+    'https://www.bujiaban.com',
+  ];
+
   for (const key of ['trustedHostOrigins', 'platformApiOrigins']) {
     assert.ok(Array.isArray(runtimeConfig[key]) && runtimeConfig[key].length > 0);
     assert.ok(
@@ -438,6 +450,15 @@ test('static production runtime config contains HTTPS-only host and API origins'
       assert.match(origin, /^https:\/\//, `${key}: ${origin}`);
       assert.doesNotMatch(origin, /^http:\/\//, `${key}: ${origin}`);
     }
+  }
+
+  assert.deepEqual(runtimeConfig.trustedHostOrigins, productionHostOrigins);
+  for (const origin of productionHostOrigins.slice(3)) {
+    assert.equal(
+      runtimeConfig.platformApiOrigins.includes(origin),
+      false,
+      `platformApiOrigins must not expand for the same-origin alias ${origin}`
+    );
   }
 });
 
