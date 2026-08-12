@@ -6,7 +6,13 @@
   "trustedHostOrigins": [
     "https://xrugc.com",
     "https://d.xrugc.com",
-    "https://d.dev.xrugc.com"
+    "https://d.dev.xrugc.com",
+    "https://d.ar-creator.cn",
+    "https://d.xiading.hxgxonline.com",
+    "https://d.mrpp.com",
+    "https://d.xiading.cc",
+    "https://bujiaban.com",
+    "https://www.bujiaban.com"
   ],
   "platformApiOrigins": [
     "https://xrugc.com",

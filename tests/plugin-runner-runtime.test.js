@@ -11,6 +11,9 @@ const {
 const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
 const embed = fs.readFileSync(path.join(root, 'public/embed.html'), 'utf8');
+const sourceRuntimeConfig = JSON.parse(
+  fs.readFileSync(path.join(root, 'public/runtime-config.json'), 'utf8')
+);
 const css = fs.readFileSync(
   path.join(root, 'public/styles/plugin-runner.css'),
   'utf8'
@@ -101,6 +104,65 @@ test('same-origin fixed API alias wins when INIT omits apiBase', async () => {
   assert.equal(request.headers.authorization, 'Bearer token-a');
   assert.equal(Object.hasOwn(request.headers, 'cache-control'), false);
   assert.equal(Object.hasOwn(request.headers, 'pragma'), false);
+});
+
+test('managed production hosts complete the exact-origin handshake through the same-origin API alias', async () => {
+  const productionHostOrigins = [
+    'https://xrugc.com',
+    'https://d.xrugc.com',
+    'https://d.dev.xrugc.com',
+    'https://d.ar-creator.cn',
+    'https://d.xiading.hxgxonline.com',
+    'https://d.mrpp.com',
+    'https://d.xiading.cc',
+    'https://bujiaban.com',
+    'https://www.bujiaban.com',
+  ];
+  assert.deepEqual(sourceRuntimeConfig.trustedHostOrigins, productionHostOrigins);
+
+  for (const hostOrigin of productionHostOrigins) {
+    const harness = await createPluginRunnerHarness({
+      hostOrigin,
+      previewUrl: `${hostOrigin}/webgl-preview/index.html`,
+      runtimeConfig: sourceRuntimeConfig,
+      onFetch(call) {
+        if (
+          new URL(call.url).pathname ===
+          '/webgl-preview/platform-api/v1/verses'
+        ) {
+          return listResponse([{ id: 10, name: 'Managed host scene' }]);
+        }
+        throw new Error(`Unexpected fetch: ${call.url}`);
+      },
+    });
+
+    assert.equal(harness.readyMessage().type, 'PLUGIN_READY');
+    assert.equal(
+      harness.readyMessage().payload.handshakeSession.length > 0,
+      true
+    );
+
+    await initialize(harness, 'managed-host-token');
+
+    assert.equal(harness.api.state.handshakeComplete, true);
+    assert.equal(harness.api.state.scenes[0]?.id, 10);
+    assert.equal(platformCalls(harness).length, 1);
+    assert.equal(new URL(platformCalls(harness)[0].url).origin, hostOrigin);
+
+    harness.window.dispatch('message', {
+      origin: 'https://attacker.example',
+      source: harness.parentWindow,
+      data: {
+        type: 'TOKEN_UPDATE',
+        payload: {
+          handshakeSession: harness.readyMessage().payload.handshakeSession,
+          token: 'attacker-token',
+        },
+      },
+    });
+    await harness.flush();
+    assert.equal(harness.api.state.token, 'managed-host-token');
+  }
 });
 
 test('scene thumbnails use anonymous CORS and fall back without breaking an option', async () => {
