@@ -18,6 +18,7 @@ const PLATFORM_API_ALIAS_SEGMENT = "platform-api";
 const BUILD_REVISION_QUERY = "__xrugc_build";
 const BUILD_CACHE_MAX_ENTRIES = 8;
 const BUILD_CACHE_MAX_BYTES = 768 * 1024 * 1024;
+const BUILD_CACHE_MAX_ENTRY_BYTES = 64 * 1024 * 1024;
 const RETAINED_OLD_BUILD_CACHES = 2;
 const SCENE_CACHE_MAX_ENTRIES = 120;
 const SCENE_CACHE_MAX_BYTES = 128 * 1024 * 1024;
@@ -192,6 +193,21 @@ const buildFitsCacheBudget = (manifest) =>
   manifest.files.length <= BUILD_CACHE_MAX_ENTRIES &&
   manifest.totalSize <= BUILD_CACHE_MAX_BYTES;
 
+// Very large Unity responses must not be tied to the Service Worker lifetime.
+// Keep verification caching for bounded artifacts and stream larger artifacts
+// through the browser network stack.
+const isCacheVerifiableBuildFile = (file) =>
+  Boolean(
+    file &&
+      file.size <= BUILD_CACHE_MAX_ENTRY_BYTES &&
+      /^[a-f0-9]{64}$/.test(file.responseSha256 || "")
+  );
+
+const isDirectStreamBuildRequest = (requestUrl) => {
+  const pathname = new URL(requestUrl).pathname;
+  return scopeUrl("Build/public.data.gz").pathname === pathname;
+};
+
 const isOwnedBuildCache = (name) =>
   name !== BUILD_META_CACHE_NAME &&
   (name.startsWith(BUILD_CACHE_PREFIX) ||
@@ -297,6 +313,10 @@ const warmPreviewCache = async (clientId) => {
   }
 
   const total = manifest.files.length;
+  const cacheableFiles = manifest.files.filter(isCacheVerifiableBuildFile);
+  const streamedFiles = manifest.files.filter(
+    (file) => !isCacheVerifiableBuildFile(file)
+  );
   await postBuildCacheStatus(clientId, manifest, {
     status: "background-started",
     completed: 0,
@@ -320,8 +340,8 @@ const warmPreviewCache = async (clientId) => {
   try {
     const cache = await caches.open(buildCacheName(manifest));
     const failedFiles = [];
-    for (let index = 0; index < manifest.files.length; index += 1) {
-      const file = manifest.files[index];
+    for (let index = 0; index < cacheableFiles.length; index += 1) {
+      const file = cacheableFiles[index];
       const cached = await warmBuildFile(
         cache,
         manifest,
@@ -339,15 +359,18 @@ const warmPreviewCache = async (clientId) => {
       });
     }
 
-    if (failedFiles.length > 0) {
+    if (failedFiles.length > 0 || streamedFiles.length > 0) {
       await postBuildCacheStatus(clientId, manifest, {
         status: "incomplete",
         background: true,
-        completed: total - failedFiles.length,
+        completed: cacheableFiles.length - failedFiles.length,
         total,
         path: "",
         failedFiles,
-        message: "One or more Unity artifacts were not cached",
+        streamedFiles: streamedFiles.map((file) => file.url),
+        message: streamedFiles.length
+          ? "Non-verifiable Unity artifacts use direct streaming"
+          : "One or more Unity artifacts were not cached",
       });
       return;
     }
@@ -694,6 +717,7 @@ const handleBuildRequest = async (event) => {
   if (
     !file ||
     !buildFitsCacheBudget(manifest) ||
+    !isCacheVerifiableBuildFile(file) ||
     request.headers.has("range")
   ) {
     return fetch(request);
@@ -773,6 +797,13 @@ self.addEventListener("fetch", (event) => {
     if (targetUrl && isAllowedSceneResourceRequestContext(event.request)) {
       event.respondWith(handleSceneResourceRequest(event, targetUrl));
     }
+    return;
+  }
+
+  // Do not call respondWith for the large Unity data artifact. This
+  // gives the browser's native network loader full ownership of the stream and
+  // prevents a slow download from being terminated with the Service Worker.
+  if (isDirectStreamBuildRequest(event.request.url)) {
     return;
   }
 

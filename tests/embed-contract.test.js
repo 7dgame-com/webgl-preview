@@ -89,6 +89,10 @@ test('Unity waits for the registered worker controller but not cache warming', (
   assert.doesNotMatch(embed, /return warmWebPreviewCache\(controller\)/);
   assert.doesNotMatch(embed, /Cache warm timed out\. Starting Unity directly/);
   assert.match(embed, /Cache warm continues in the background/);
+  assert.match(
+    warmSource,
+    /message\.status === "complete"[\s\S]*?message\.status === "cancelled"[\s\S]*?message\.status === "incomplete"/
+  );
   assert.doesNotMatch(warmSource, /cancel-webgl-preview-cache/);
   assert.match(embed, /webPreviewUnityReady = true;[\s\S]+setWebPreviewLoading\(false\)/);
 });

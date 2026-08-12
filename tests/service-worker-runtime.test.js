@@ -348,7 +348,7 @@ const loadServiceWorker = ({
       'globalThis.__SW_TEST__ = {' +
       ' handleBuildRequest, handleSceneResourceRequest, warmPreviewCache,' +
       ' getBuildManifest, buildCacheName, buildCacheKey, pruneOldBuildCaches,' +
-      ' buildArtifactCoordinator' +
+      ' buildArtifactCoordinator, isDirectStreamBuildRequest' +
       '};',
     context,
     { filename: 'sw.js' }
@@ -383,6 +383,18 @@ const loadServiceWorker = ({
         },
       });
       await Promise.all(pending);
+    },
+    dispatchFetchIsIntercepted(request) {
+      let intercepted = false;
+      listeners.get('fetch')({
+        request,
+        clientId: 'preview-client',
+        respondWith() {
+          intercepted = true;
+        },
+        waitUntil() {},
+      });
+      return intercepted;
     },
   };
 };
@@ -749,6 +761,42 @@ for (const { label, scope } of scopeCases) {
     );
   });
 
+  test(`${label}: cache warm skips oversized artifacts`, async () => {
+    const fixture = buildFixture('8');
+    const dataFile = fixture.manifest.files.find((file) => file.role === 'data');
+    dataFile.size = 64 * 1024 * 1024 + 1;
+    fixture.manifest.totalSize = fixture.manifest.files.reduce(
+      (total, file) => total + file.size,
+      0
+    );
+    const storage = new MemoryCacheStorage();
+    const postedMessages = [];
+
+    const { artifactRequests, runtime } = await warmRuntime({
+      fixture,
+      scope,
+      storage,
+      postedMessages,
+    });
+
+    assert.deepEqual(
+      artifactRequests.map(({ file }) => file.role),
+      ['loader', 'framework', 'wasm']
+    );
+    const currentCache = await storage.open(runtime.buildCacheName(fixture.manifest));
+    assert.equal(currentCache.entries.size, 3);
+    const incomplete = postedMessages.find(
+      (message) => message.status === 'incomplete'
+    );
+    assert.ok(incomplete);
+    assert.deepEqual(
+      Array.from(incomplete.streamedFiles),
+      [dataFile.url]
+    );
+    assert.equal(postedMessages.some((message) => message.status === 'error'), false);
+    assert.equal(postedMessages.some((message) => message.status === 'complete'), false);
+  });
+
   test(`${label}: a partial verified warm resumes without downloading cached files`, async () => {
     const fixture = buildFixture('8');
     const storage = new MemoryCacheStorage();
@@ -933,6 +981,37 @@ for (const { label, scope } of scopeCases) {
     assert.equal(response.status, 206);
     assert.equal(response.headers.get('content-range'), 'bytes 0-0/10');
     assert.deepEqual(Buffer.from(await response.arrayBuffer()), body);
+    assert.equal(artifactRequests.length, 1);
+    assert.equal(runtime.buildArtifactCoordinator.size, 0);
+    assert.deepEqual(await storage.keys(), ['xrugc-webgl-preview-meta-v1']);
+  });
+
+  test(`${label}: large Unity data responses stream directly without cache coordination`, async () => {
+    const fixture = buildFixture('6');
+    const dataFile = fixture.manifest.files.find((file) => file.role === 'data');
+    dataFile.size = 64 * 1024 * 1024 + 1;
+    fixture.manifest.totalSize = fixture.manifest.files.reduce(
+      (total, file) => total + file.size,
+      0
+    );
+    const storage = new MemoryCacheStorage();
+    const artifactRequests = [];
+    const runtime = loadServiceWorker({
+      scope,
+      caches: storage,
+      fetchImpl: fixtureFetch({ fixture, scope, artifactRequests }),
+    });
+    const request = buildRequest(scope, dataFile, fixture.manifest.buildId);
+
+    assert.equal(runtime.isDirectStreamBuildRequest(request.url), true);
+    assert.equal(runtime.dispatchFetchIsIntercepted(request), false);
+
+    const response = await runtime.handleBuildRequest({ request });
+
+    assert.deepEqual(
+      Buffer.from(await response.arrayBuffer()),
+      fixture.bodies.get(dataFile.url)
+    );
     assert.equal(artifactRequests.length, 1);
     assert.equal(runtime.buildArtifactCoordinator.size, 0);
     assert.deepEqual(await storage.keys(), ['xrugc-webgl-preview-meta-v1']);
