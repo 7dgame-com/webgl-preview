@@ -197,7 +197,7 @@
 
   const isResponseDigest = (value) => /^[a-f0-9]{64}$/.test(value || "");
 
-  const verifiedResponse = (response, file) => {
+  const verifiedResponse = (response, file, options = {}) => {
     if (!response || !response.body || !isResponseDigest(file.responseSha256)) {
       throw new BuildArtifactMismatchError(file, "", 0);
     }
@@ -209,11 +209,19 @@
         const bytes = asBytes(chunk);
         receivedBytes += bytes.byteLength;
         hasher.update(bytes);
+        if (typeof options.onProgress === "function") {
+          options.onProgress(receivedBytes, file.responseSize || 0);
+        }
         controller.enqueue(chunk);
       },
       flush() {
         const actualSha256 = hasher.digestHex();
-        if (actualSha256 !== file.responseSha256) {
+        if (
+          actualSha256 !== file.responseSha256 ||
+          (Number.isSafeInteger(file.responseSize) &&
+            file.responseSize > 0 &&
+            receivedBytes !== file.responseSize)
+        ) {
           throw new BuildArtifactMismatchError(
             file,
             actualSha256,
@@ -230,9 +238,15 @@
     });
   };
 
-  const cacheVerifiedResponse = async (cache, key, response, file) => {
+  const cacheVerifiedResponse = async (
+    cache,
+    key,
+    response,
+    file,
+    options = {}
+  ) => {
     try {
-      await cache.put(key, verifiedResponse(response, file));
+      await cache.put(key, verifiedResponse(response, file, options));
       return true;
     } catch (error) {
       await cache.delete(key).catch(() => false);

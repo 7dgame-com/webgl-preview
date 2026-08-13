@@ -30,6 +30,7 @@
       </div>
     </div>
     <script src="./modules/embed-parent-protocol.js?v=__WEBGL_PREVIEW_BUILD_VERSION__"></script>
+    <script src="./modules/sw-build-cache.js?v=__WEBGL_PREVIEW_BUILD_VERSION__"></script>
     <script>
       var canvas = document.querySelector("#unity-canvas");
       var loadingShield = document.querySelector("#web-preview-loading-shield");
@@ -449,6 +450,7 @@
 
       var webPreviewBuildCacheVersion = "";
       var webPreviewBuildManifest = null;
+      var webPreviewLargeDataCacheReady = false;
       var webPreviewCacheStatusTimeoutMs = 10000;
       var webPreviewServiceWorkerStartupTimeoutMs = 30000;
       function withBuildCacheVersion(url) {
@@ -519,6 +521,187 @@
 
       function postCacheStatusToParent(message) {
         postWebPreviewParent(message);
+      }
+
+      function webPreviewBuildCacheName(manifest) {
+        return "xrugc-webgl-preview-build-v3-" +
+          String(manifest.buildId || "").replace(/^sha256:/, "");
+      }
+
+      function webPreviewBuildCacheKey(url, manifest) {
+        var keyUrl = new URL(url, window.location.href);
+        keyUrl.searchParams.set("__xrugc_build", manifest.buildId);
+        keyUrl.searchParams.delete("__xrugc_cache_ready");
+        return new Request(keyUrl.toString(), { credentials: "same-origin" });
+      }
+
+      function webPreviewBuildCacheReadyKey(manifest, file) {
+        var markerUrl = new URL("__xrugc_build_cache_ready__", window.location.href);
+        markerUrl.searchParams.set("v", manifest.buildId);
+        markerUrl.searchParams.set("role", file.role);
+        return new Request(markerUrl.toString(), { credentials: "same-origin" });
+      }
+
+      function postLargeDataCacheStatus(status, file, details) {
+        var payload = Object.assign({
+          type: "webgl-preview-cache-status",
+          status: status,
+          background: false,
+          version: webPreviewBuildManifest.buildId,
+          buildId: webPreviewBuildManifest.buildId,
+          path: file.url,
+          completed: 0,
+          total: file.responseSize || 0
+        }, details || {});
+        postCacheStatusToParent(payload);
+      }
+
+      function largeDataCacheMetadataMatches(metadata, manifest, file) {
+        return !!(
+          metadata &&
+          metadata.buildId === manifest.buildId &&
+          metadata.role === file.role &&
+          metadata.responseSha256 === file.responseSha256 &&
+          metadata.responseSize === file.responseSize
+        );
+      }
+
+      async function prepareLargeUnityDataCache(byRole) {
+        var manifest = webPreviewBuildManifest;
+        var file = manifest && manifest.files.find(function(candidate) {
+          return candidate.role === "data";
+        });
+        if (
+          !file ||
+          file.size <= 64 * 1024 * 1024 ||
+          !/^[a-f0-9]{64}$/.test(String(file.responseSha256 || "")) ||
+          !Number.isSafeInteger(file.responseSize) ||
+          file.responseSize <= 0 ||
+          !("caches" in window) ||
+          !window.WebGlBuildCacheCore ||
+          typeof window.WebGlBuildCacheCore.cacheVerifiedResponse !== "function"
+        ) {
+          return false;
+        }
+
+        var cache = null;
+        var requestUrl = withBuildCacheVersion(byRole.data);
+        var cacheKey = webPreviewBuildCacheKey(requestUrl, manifest);
+        var readyKey = webPreviewBuildCacheReadyKey(manifest, file);
+        try {
+          cache = await caches.open(webPreviewBuildCacheName(manifest));
+          var marker = await cache.match(readyKey);
+          var cached = await cache.match(cacheKey);
+          if (marker && cached) {
+            if (largeDataCacheMetadataMatches(await marker.json(), manifest, file)) {
+              postLargeDataCacheStatus("complete", file, {
+                completed: file.responseSize,
+                total: file.responseSize,
+                reused: true
+              });
+              return true;
+            }
+          }
+
+          await Promise.all([
+            cache.delete(readyKey).catch(function() { return false; }),
+            cache.delete(cacheKey).catch(function() { return false; })
+          ]);
+
+          if (navigator.storage && typeof navigator.storage.persist === "function") {
+            await navigator.storage.persist().catch(function() { return false; });
+          }
+
+          var lastProgressAt = 0;
+          postLargeDataCacheStatus("started", file);
+          setWebPreviewLoading(true, "", "", {
+            titleKey: "cachePlugin",
+            detailKey: "cacheDetail",
+            params: {
+              percent: "0%",
+              actionKey: "cachePrepare",
+              completed: 0,
+              total: 1,
+              path: "：" + file.url
+            }
+          });
+
+          var response = await fetch(requestUrl, {
+            method: "GET",
+            cache: "reload",
+            credentials: "same-origin"
+          });
+          if (!response.ok || !response.body) {
+            throw new Error("Unity data HTTP " + response.status);
+          }
+          await window.WebGlBuildCacheCore.cacheVerifiedResponse(
+            cache,
+            cacheKey,
+            response,
+            file,
+            {
+              onProgress: function(receivedBytes, totalBytes) {
+                var now = Date.now();
+                if (now - lastProgressAt < 250 && receivedBytes < totalBytes) {
+                  return;
+                }
+                lastProgressAt = now;
+                var percent = totalBytes
+                  ? Math.min(99, Math.floor((receivedBytes / totalBytes) * 100))
+                  : 0;
+                postLargeDataCacheStatus("progress", file, {
+                  completed: receivedBytes,
+                  total: totalBytes
+                });
+                setWebPreviewLoading(true, "", "", {
+                  titleKey: "cachePlugin",
+                  detailKey: "cacheDetail",
+                  params: {
+                    percent: percent + "%",
+                    actionKey: "cachePrepare",
+                    completed: Math.round(receivedBytes / 1048576),
+                    total: Math.round(totalBytes / 1048576),
+                    path: " MB：" + file.url
+                  }
+                });
+              }
+            }
+          );
+          await cache.put(
+            readyKey,
+            new Response(JSON.stringify({
+              buildId: manifest.buildId,
+              role: file.role,
+              responseSha256: file.responseSha256,
+              responseSize: file.responseSize
+            }), {
+              headers: {
+                "cache-control": "no-store",
+                "content-type": "application/json; charset=utf-8"
+              }
+            })
+          );
+          postLargeDataCacheStatus("complete", file, {
+            completed: file.responseSize,
+            total: file.responseSize,
+            reused: false
+          });
+          return true;
+        } catch (error) {
+          if (cache) {
+            await Promise.all([
+              cache.delete(readyKey).catch(function() { return false; }),
+              cache.delete(cacheKey).catch(function() { return false; })
+            ]);
+          }
+          postLargeDataCacheStatus("incomplete", file, {
+            failedFiles: [file.url],
+            streamedFiles: [file.url],
+            message: error instanceof Error ? error.message : String(error)
+          });
+          console.warn("[WebPreview] Verified Unity data cache unavailable; using direct streaming.", error);
+          return false;
+        }
       }
 
       function createWebPreviewServiceWorkerError(message) {
@@ -745,6 +928,11 @@
       function applyWebPreviewBuildFiles(byRole) {
         loaderUrl = withBuildCacheVersion(byRole.loader);
         config.dataUrl = withBuildCacheVersion(byRole.data);
+        if (webPreviewLargeDataCacheReady) {
+          var cachedDataUrl = new URL(config.dataUrl);
+          cachedDataUrl.searchParams.set("__xrugc_cache_ready", "1");
+          config.dataUrl = cachedDataUrl.toString();
+        }
         config.frameworkUrl = withBuildCacheVersion(byRole.framework);
         config.codeUrl = withBuildCacheVersion(byRole.wasm);
       }
@@ -1090,11 +1278,16 @@
         document.body.appendChild(script);
       }
 
+      var webPreviewServiceWorkerController = null;
       prepareWebPreviewServiceWorker().then(function(controller) {
-        // The controller gate is required; the ~199 MB warm remains
-        // fire-and-forget and shares foreground downloads in the SW.
-        warmWebPreviewCache(controller);
+        webPreviewServiceWorkerController = controller;
         return loadWebPreviewBuildManifest();
+      }).then(function(byRole) {
+        return prepareLargeUnityDataCache(byRole).then(function(cacheReady) {
+          webPreviewLargeDataCacheReady = cacheReady;
+          warmWebPreviewCache(webPreviewServiceWorkerController);
+          return byRole;
+        });
       }).then(function(byRole) {
         applyWebPreviewBuildFiles(byRole);
         startUnityWebPreview();

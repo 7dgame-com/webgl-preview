@@ -56,6 +56,8 @@ test('manifest describes and verifies the exact compressed Unity artifacts', asy
   for (const file of manifest.files) {
     assert.match(file.sha256, /^[a-f0-9]{64}$/);
     assert.match(file.responseSha256, /^[a-f0-9]{64}$/);
+    assert.ok(Number.isSafeInteger(file.responseSize));
+    assert.ok(file.responseSize > 0);
   }
   assert.equal(
     manifest.files.find((file) => file.role === 'loader').responseSha256,
@@ -133,6 +135,7 @@ test('strict image verification rejects Git LFS pointer files', async (t) => {
     (candidate) => candidate.contentEncoding !== 'identity'
   )) {
     assert.equal(file.responseSha256, null);
+    assert.equal(file.responseSize, null);
   }
   fs.writeFileSync(manifestPath, JSON.stringify(sourceManifest));
   await assert.rejects(

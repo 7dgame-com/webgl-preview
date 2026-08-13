@@ -9,6 +9,7 @@
       "size": 19430,
       "sha256": "d0a6c2292cbe44f0762747d32f4381a9b7fa3c8473717beb545925d50e177c01",
       "responseSha256": "d0a6c2292cbe44f0762747d32f4381a9b7fa3c8473717beb545925d50e177c01",
+      "responseSize": 19430,
       "contentEncoding": "identity",
       "contentType": "application/javascript"
     },
@@ -18,6 +19,7 @@
       "size": 175522254,
       "sha256": "b3e261ecbd8a6eabac45fb39991ca3a394f8af48cb99a63e7ebe0382e1b3cdb6",
       "responseSha256": null,
+      "responseSize": null,
       "contentEncoding": "gzip",
       "contentType": "application/octet-stream"
     },
@@ -27,6 +29,7 @@
       "size": 100721,
       "sha256": "5f553cc83c90263896865f71941f475f9a4ba0754054f20a93ee700a78e477cc",
       "responseSha256": null,
+      "responseSize": null,
       "contentEncoding": "gzip",
       "contentType": "application/javascript"
     },
@@ -36,6 +39,7 @@
       "size": 23475045,
       "sha256": "e2cadd8f38c950580dece80087bbf8c46a9b37b61f8d7f69aac15fe40d44999e",
       "responseSha256": null,
+      "responseSize": null,
       "contentEncoding": "gzip",
       "contentType": "application/wasm"
     }
