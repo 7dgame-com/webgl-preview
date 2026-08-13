@@ -558,7 +558,7 @@ test('runtime configuration precedes READY and terminal errors are stable', () =
   assert.match(source, /transitionLifecycle\(PREVIEW_LIFECYCLE\.TERMINAL_ERROR\)/);
 });
 
-test('background cache status never blocks the foreground runner', () => {
+test('background cache status never blocks the foreground runner or mislabels planned streaming', () => {
   assert.match(source, /message\.status === "background-started"/);
   assert.match(source, /message\.status === "background-progress"/);
   assert.match(
@@ -566,7 +566,14 @@ test('background cache status never blocks the foreground runner', () => {
     /isBackgroundCache[\s\S]*?state\.cacheActive = false;[\s\S]*?return;/
   );
   assert.match(source, /message\.status === "incomplete"/);
+  assert.match(source, /streamedFiles\.length > 0 && failedFiles\.length === 0/);
+  assert.match(source, /log\(t\("cacheStreaming"\)/);
   assert.match(source, /WGP-CACHE-INCOMPLETE/);
+});
+
+test('outer runner translates Unity runtime progress for every supported locale', () => {
+  assert.equal(source.match(/loadingRuntimePercent:/g)?.length, 5);
+  assert.match(source, /loadingRuntimePercent:[\s\S]*?\{percent\}%/);
 });
 
 test('layout supports dynamic viewport and reduced motion', () => {
