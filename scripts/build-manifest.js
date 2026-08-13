@@ -90,17 +90,22 @@ const findBuildFiles = (rootDir) => {
   });
 };
 
-const sha256DecodedFile = async (filePath, contentEncoding) => {
-  if (contentEncoding === 'identity') return sha256File(filePath);
+const describeDecodedFile = async (filePath, contentEncoding) => {
+  if (contentEncoding === 'identity') {
+    const stat = fs.statSync(filePath);
+    return { sha256: await sha256File(filePath), size: stat.size };
+  }
 
   const decoder =
     contentEncoding === 'gzip'
       ? zlib.createGunzip()
       : zlib.createBrotliDecompress();
   const hash = crypto.createHash('sha256');
+  let size = 0;
   const sink = new Writable({
     write(chunk, _encoding, callback) {
       hash.update(chunk);
+      size += chunk.byteLength;
       callback();
     },
   });
@@ -112,7 +117,7 @@ const sha256DecodedFile = async (filePath, contentEncoding) => {
       `Compressed artifact is invalid (${contentEncoding}): ${filePath}: ${error.message}`
     );
   }
-  return hash.digest('hex');
+  return { sha256: hash.digest('hex'), size };
 };
 
 const canonicalBuildDescription = (files) =>
@@ -150,12 +155,11 @@ const describeBuildFile = async (definition, options) => {
   // Fetch/Service Worker exposes the Content-Encoding decoded response body.
   // Keep sha256 as the immutable on-disk artifact identity, and publish the
   // derived response digest separately for bounded streaming verification.
-  const responseSha256 =
-    contentEncoding === 'identity'
-      ? sha256
-      : lfsPointer
-        ? null
-        : await sha256DecodedFile(definition.filePath, contentEncoding);
+  const decoded = lfsPointer
+    ? null
+    : await describeDecodedFile(definition.filePath, contentEncoding);
+  const responseSha256 = decoded ? decoded.sha256 : null;
+  const responseSize = decoded ? decoded.size : null;
 
   return {
     role: definition.role,
@@ -163,6 +167,7 @@ const describeBuildFile = async (definition, options) => {
     size,
     sha256,
     responseSha256,
+    responseSize,
     contentEncoding,
     contentType: definition.contentType,
   };
@@ -222,6 +227,12 @@ const assertManifestShape = (manifest) => {
     ) {
       throw new Error(`Invalid response SHA-256 for ${file.role}`);
     }
+    if (
+      file.responseSize !== null &&
+      (!Number.isSafeInteger(file.responseSize) || file.responseSize <= 0)
+    ) {
+      throw new Error(`Invalid responseSize for ${file.role}`);
+    }
     if (!Number.isSafeInteger(file.size) || file.size < MIN_ARTIFACT_SIZE) {
       throw new Error(`Invalid size for ${file.role}: ${file.size}`);
     }
@@ -261,6 +272,7 @@ const verifyBuildManifest = async ({
       'size',
       'sha256',
       'responseSha256',
+      'responseSize',
       'contentEncoding',
       'contentType',
     ]) {

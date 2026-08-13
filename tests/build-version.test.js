@@ -54,7 +54,7 @@ test('build version injection updates UI text and both shell cache keys', (t) =>
   assert.equal(embed.includes(BUILD_VERSION_MARKER), false);
   assert.equal(runner.includes(BUILD_VERSION_MARKER), false);
   assert.equal((index.match(/\?v=2026\.08\.01-1842/g) || []).length, 2);
-  assert.equal((embed.match(/\?v=2026\.08\.01-1842/g) || []).length, 1);
+  assert.equal((embed.match(/\?v=2026\.08\.01-1842/g) || []).length, 2);
   assert.match(
     runner,
     /^const WEBGL_PREVIEW_BUILD_VERSION = "2026\.08\.01-1842";$/m

@@ -165,6 +165,80 @@ test('managed production hosts complete the exact-origin handshake through the s
   }
 });
 
+test('Unity runtime progress messages update the outer loading percentage', async () => {
+  const harness = await createPluginRunnerHarness();
+  const frameOrigin = new URL(harness.document.baseURI).origin;
+  const frameSession = 'unity-progress-session';
+  harness.api.state.frameOrigin = frameOrigin;
+  harness.api.state.frameSession = frameSession;
+
+  const dispatchRuntimeProgress = (percent) => {
+    harness.window.dispatch('message', {
+      origin: frameOrigin,
+      source: harness.api.elements.frame.contentWindow,
+      data: {
+        type: 'webgl-preview-loading',
+        session: frameSession,
+        visible: true,
+        i18n: {
+          titleKey: 'loadingPlugin',
+          detailKey: 'loadingRuntimePercent',
+          params: { percent },
+        },
+      },
+    });
+  };
+
+  dispatchRuntimeProgress(42);
+  assert.match(harness.api.elements.loadingDetail.textContent, /^42%/);
+  assert.equal(harness.api.elements.loadingProgressText.textContent, '42%');
+  assert.equal(harness.api.elements.loadingProgressBar.style.width, '42%');
+
+  dispatchRuntimeProgress(94);
+  assert.match(harness.api.elements.loadingDetail.textContent, /^94%/);
+  assert.equal(harness.api.elements.loadingProgressText.textContent, '94%');
+  assert.equal(harness.api.elements.loadingProgressBar.style.width, '94%');
+});
+
+test('planned large-file streaming is informational while real cache misses remain errors', async () => {
+  const harness = await createPluginRunnerHarness();
+  const frameOrigin = new URL(harness.document.baseURI).origin;
+  const frameSession = 'unity-cache-session';
+  harness.api.state.frameOrigin = frameOrigin;
+  harness.api.state.frameSession = frameSession;
+
+  const dispatchCacheStatus = (overrides) => {
+    harness.window.dispatch('message', {
+      origin: frameOrigin,
+      source: harness.api.elements.frame.contentWindow,
+      data: {
+        type: 'webgl-preview-cache-status',
+        session: frameSession,
+        status: 'incomplete',
+        background: true,
+        ...overrides,
+      },
+    });
+  };
+
+  dispatchCacheStatus({
+    failedFiles: [],
+    streamedFiles: ['./Build/public.data.gz'],
+  });
+  assert.match(
+    harness.api.elements.log.textContent,
+    /Plugin cache is ready\. The browser will stream the large Unity data file directly\./
+  );
+  assert.doesNotMatch(harness.api.elements.log.textContent, /WGP-CACHE-INCOMPLETE/);
+  assert.match(harness.api.elements.log.textContent, /public\.data\.gz/);
+
+  dispatchCacheStatus({
+    failedFiles: ['./Build/public.wasm.gz'],
+    streamedFiles: ['./Build/public.data.gz'],
+  });
+  assert.match(harness.api.elements.log.textContent, /WGP-CACHE-INCOMPLETE/);
+});
+
 test('scene thumbnails use anonymous CORS and fall back without breaking an option', async () => {
   const thumbnailUrl = 'https://data.7dgame.com/scenes/thumbnail.png';
   const harness = await createPluginRunnerHarness({
