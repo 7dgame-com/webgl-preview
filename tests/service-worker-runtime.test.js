@@ -158,6 +158,24 @@ test('same-length digest mismatch is deleted and reports WGP-CACHE-MISMATCH', as
   assert.equal(cache.deleteCalls, 1);
 });
 
+test('verified cache rejects a truncated response before publishing an entry', async () => {
+  const body = Buffer.from('complete-response');
+  const truncated = body.subarray(0, body.length - 1);
+  const cache = new MemoryCache();
+  const key = new Request('https://preview.test/Build/public.data.gz?v=build');
+  const file = artifact(truncated, {
+    role: 'data',
+    responseSize: body.byteLength,
+  });
+
+  await assert.rejects(
+    cacheVerifiedResponse(cache, key, new Response(truncated), file),
+    (error) => error && error.code === 'WGP-CACHE-MISMATCH'
+  );
+  assert.equal(await cache.match(key), undefined);
+  assert.equal(cache.deleteCalls, 1);
+});
+
 for (const order of ['warm-first', 'foreground-first']) {
   test(`${order} consumers share one verified in-flight download`, async () => {
     const body = crypto.randomBytes(256 * 1024 + 11);
@@ -348,7 +366,8 @@ const loadServiceWorker = ({
       'globalThis.__SW_TEST__ = {' +
       ' handleBuildRequest, handleSceneResourceRequest, warmPreviewCache,' +
       ' getBuildManifest, buildCacheName, buildCacheKey, pruneOldBuildCaches,' +
-      ' buildArtifactCoordinator' +
+      ' buildArtifactCoordinator, isDirectStreamBuildRequest,' +
+      ' buildCacheReadyKey, hasVerifiedLargeBuildFile' +
       '};',
     context,
     { filename: 'sw.js' }
@@ -384,6 +403,18 @@ const loadServiceWorker = ({
       });
       await Promise.all(pending);
     },
+    dispatchFetchIsIntercepted(request) {
+      let intercepted = false;
+      listeners.get('fetch')({
+        request,
+        clientId: 'preview-client',
+        respondWith() {
+          intercepted = true;
+        },
+        waitUntil() {},
+      });
+      return intercepted;
+    },
   };
 };
 
@@ -398,6 +429,7 @@ const runtimeManifest = ({ loaderResponseSha256 = 'c'.repeat(64) } = {}) => ({
     sha256: 'b'.repeat(64),
     responseSha256:
       role === 'loader' ? loaderResponseSha256 : 'c'.repeat(64),
+    responseSize: 1,
     contentEncoding: role === 'loader' ? 'identity' : 'gzip',
     contentType: 'application/octet-stream',
   })),
@@ -598,6 +630,7 @@ const buildFixture = (revisionDigit) => {
       size: body.byteLength,
       sha256: sha256(body),
       responseSha256: sha256(body),
+      responseSize: body.byteLength,
       contentEncoding: 'identity',
       contentType: role === 'loader' || role === 'framework'
         ? 'application/javascript'
@@ -747,6 +780,42 @@ for (const { label, scope } of scopeCases) {
       ),
       true
     );
+  });
+
+  test(`${label}: cache warm skips oversized artifacts`, async () => {
+    const fixture = buildFixture('8');
+    const dataFile = fixture.manifest.files.find((file) => file.role === 'data');
+    dataFile.size = 64 * 1024 * 1024 + 1;
+    fixture.manifest.totalSize = fixture.manifest.files.reduce(
+      (total, file) => total + file.size,
+      0
+    );
+    const storage = new MemoryCacheStorage();
+    const postedMessages = [];
+
+    const { artifactRequests, runtime } = await warmRuntime({
+      fixture,
+      scope,
+      storage,
+      postedMessages,
+    });
+
+    assert.deepEqual(
+      artifactRequests.map(({ file }) => file.role),
+      ['loader', 'framework', 'wasm']
+    );
+    const currentCache = await storage.open(runtime.buildCacheName(fixture.manifest));
+    assert.equal(currentCache.entries.size, 3);
+    const incomplete = postedMessages.find(
+      (message) => message.status === 'incomplete'
+    );
+    assert.ok(incomplete);
+    assert.deepEqual(
+      Array.from(incomplete.streamedFiles),
+      [dataFile.url]
+    );
+    assert.equal(postedMessages.some((message) => message.status === 'error'), false);
+    assert.equal(postedMessages.some((message) => message.status === 'complete'), false);
   });
 
   test(`${label}: a partial verified warm resumes without downloading cached files`, async () => {
@@ -936,6 +1005,90 @@ for (const { label, scope } of scopeCases) {
     assert.equal(artifactRequests.length, 1);
     assert.equal(runtime.buildArtifactCoordinator.size, 0);
     assert.deepEqual(await storage.keys(), ['xrugc-webgl-preview-meta-v1']);
+  });
+
+  test(`${label}: large Unity data responses stream directly without cache coordination`, async () => {
+    const fixture = buildFixture('6');
+    const dataFile = fixture.manifest.files.find((file) => file.role === 'data');
+    dataFile.size = 64 * 1024 * 1024 + 1;
+    dataFile.responseSize = fixture.bodies.get(dataFile.url).byteLength;
+    fixture.manifest.totalSize = fixture.manifest.files.reduce(
+      (total, file) => total + file.size,
+      0
+    );
+    const storage = new MemoryCacheStorage();
+    const artifactRequests = [];
+    const runtime = loadServiceWorker({
+      scope,
+      caches: storage,
+      fetchImpl: fixtureFetch({ fixture, scope, artifactRequests }),
+    });
+    const request = buildRequest(scope, dataFile, fixture.manifest.buildId);
+
+    assert.equal(runtime.isDirectStreamBuildRequest(request.url), true);
+    assert.equal(runtime.dispatchFetchIsIntercepted(request), false);
+
+    const response = await runtime.handleBuildRequest({ request });
+
+    assert.deepEqual(
+      Buffer.from(await response.arrayBuffer()),
+      fixture.bodies.get(dataFile.url)
+    );
+    assert.equal(artifactRequests.length, 1);
+    assert.equal(runtime.buildArtifactCoordinator.size, 0);
+    assert.deepEqual(await storage.keys(), ['xrugc-webgl-preview-meta-v1']);
+  });
+
+  test(`${label}: a fully verified large Unity data entry is served only with its ready marker`, async () => {
+    const fixture = buildFixture('6');
+    const dataFile = fixture.manifest.files.find((file) => file.role === 'data');
+    dataFile.size = 64 * 1024 * 1024 + 1;
+    dataFile.responseSize = fixture.bodies.get(dataFile.url).byteLength;
+    fixture.manifest.totalSize = fixture.manifest.files.reduce(
+      (total, file) => total + file.size,
+      0
+    );
+    const storage = new MemoryCacheStorage();
+    const artifactRequests = [];
+    const runtime = loadServiceWorker({
+      scope,
+      caches: storage,
+      fetchImpl: fixtureFetch({ fixture, scope, artifactRequests }),
+    });
+    const cache = await storage.open(runtime.buildCacheName(fixture.manifest));
+    const request = buildRequest(scope, dataFile, fixture.manifest.buildId);
+    await cache.put(
+      runtime.buildCacheKey(request, fixture.manifest),
+      new Response(fixture.bodies.get(dataFile.url))
+    );
+
+    const readyRequestUrl = new URL(request.url);
+    readyRequestUrl.searchParams.set('__xrugc_cache_ready', '1');
+    const readyRequest = new Request(readyRequestUrl);
+    assert.equal(runtime.dispatchFetchIsIntercepted(readyRequest), true);
+    const missingMarker = await runtime.dispatchFetch(readyRequest);
+    assert.equal(missingMarker.status, 409);
+    assert.match(await missingMarker.text(), /WGP-CACHE-MISS/);
+
+    await cache.put(
+      runtime.buildCacheReadyKey(fixture.manifest, dataFile),
+      new Response(JSON.stringify({
+        buildId: fixture.manifest.buildId,
+        role: dataFile.role,
+        responseSha256: dataFile.responseSha256,
+        responseSize: dataFile.responseSize,
+      }))
+    );
+    assert.equal(
+      await runtime.hasVerifiedLargeBuildFile(cache, fixture.manifest, dataFile),
+      true
+    );
+    const cached = await runtime.dispatchFetch(readyRequest);
+    assert.deepEqual(
+      Buffer.from(await cached.arrayBuffer()),
+      fixture.bodies.get(dataFile.url)
+    );
+    assert.equal(artifactRequests.length, 0);
   });
 
   test(`${label}: an oversized streaming build response is returned without buffering`, async () => {

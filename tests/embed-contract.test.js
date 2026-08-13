@@ -74,7 +74,7 @@ test('runner does not rewrite scene assets through a generic proxy', () => {
   assert.match(embed, /return clonePayload\(payload\)/);
 });
 
-test('Unity waits for the registered worker controller but not cache warming', () => {
+test('Unity waits for verified large-data caching but not bounded cache warming', () => {
   const warmStart = embed.indexOf('function warmWebPreviewCache(controller)');
   const warmEnd = embed.indexOf('var webPreviewSceneVisibleNotified', warmStart);
   const warmSource = embed.slice(warmStart, warmEnd);
@@ -83,13 +83,22 @@ test('Unity waits for the registered worker controller but not cache warming', (
   assert.ok(warmEnd > warmStart);
   assert.match(embed, /worker\.state === "activated"[\s\S]+navigator\.serviceWorker\.controller === worker/);
   assert.match(embed, /prepareWebPreviewServiceWorker\(\)\.then\(function\(controller\)/);
-  assert.match(embed, /warmWebPreviewCache\(controller\);\s*return loadWebPreviewBuildManifest\(\);/);
+  assert.match(embed, /return loadWebPreviewBuildManifest\(\);/);
+  assert.match(embed, /return prepareLargeUnityDataCache\(byRole\)\.then\(function\(cacheReady\)/);
+  assert.match(embed, /webPreviewLargeDataCacheReady = cacheReady;\s*warmWebPreviewCache/);
   assert.match(embed, /applyWebPreviewBuildFiles\(byRole\)/);
   assert.match(embed, /startUnityWebPreview\(\);/);
   assert.doesNotMatch(embed, /return warmWebPreviewCache\(controller\)/);
   assert.doesNotMatch(embed, /Cache warm timed out\. Starting Unity directly/);
   assert.match(embed, /Cache warm continues in the background/);
+  assert.match(
+    warmSource,
+    /message\.status === "complete"[\s\S]*?message\.status === "cancelled"[\s\S]*?message\.status === "incomplete"/
+  );
   assert.doesNotMatch(warmSource, /cancel-webgl-preview-cache/);
+  assert.match(embed, /cacheVerifiedResponse\(/);
+  assert.match(embed, /__xrugc_build_cache_ready__/);
+  assert.match(embed, /__xrugc_cache_ready/);
   assert.match(embed, /webPreviewUnityReady = true;[\s\S]+setWebPreviewLoading\(false\)/);
 });
 
@@ -98,6 +107,7 @@ test('runner loads every Unity artifact from one validated build manifest', () =
   assert.match(embed, /webPreviewBuildCacheVersion = manifest\.buildId/);
   assert.match(embed, /loaderUrl = withBuildCacheVersion\(byRole\.loader\)/);
   assert.match(embed, /config\.dataUrl = withBuildCacheVersion\(byRole\.data\)/);
+  assert.match(embed, /cachedDataUrl\.searchParams\.set\("__xrugc_cache_ready", "1"\)/);
   assert.match(embed, /config\.frameworkUrl = withBuildCacheVersion\(byRole\.framework\)/);
   assert.match(embed, /config\.codeUrl = withBuildCacheVersion\(byRole\.wasm\)/);
   assert.doesNotMatch(embed, /2026\.05\.21\.13/);

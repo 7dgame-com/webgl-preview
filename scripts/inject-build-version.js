@@ -8,7 +8,7 @@ const BUILD_VERSION_RE =
   /^\d{4}\.(?:0[1-9]|1[0-2])\.(?:0[1-9]|[12]\d|3[01])-(?:[01]\d|2[0-3])[0-5]\d$/;
 const TARGETS = [
   { relativePath: 'index.html', expectedMarkers: 2 },
-  { relativePath: 'embed.html', expectedMarkers: 1 },
+  { relativePath: 'embed.html', expectedMarkers: 2 },
   { relativePath: 'modules/plugin-runner.js', expectedMarkers: 1 },
 ];
 
@@ -90,8 +90,8 @@ function verifyInjectedBuildVersion({ rootDir }) {
     throw new Error('Shell cache keys do not match the injected build version');
   }
   const embed = sources.get('embed.html');
-  if (embed.split(`?v=${buildVersion}`).length - 1 !== 1) {
-    throw new Error('Embed protocol cache key does not match the injected build version');
+  if (embed.split(`?v=${buildVersion}`).length - 1 !== 2) {
+    throw new Error('Embed module cache keys do not match the injected build version');
   }
   return { version: buildVersion };
 }

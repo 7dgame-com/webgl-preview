@@ -26,7 +26,7 @@ test('cache warming is background-only and never reports an early completion', (
   const warmSource = source.slice(warmStart, warmEnd);
   const backgroundStart = warmSource.indexOf('status: "background-started"');
   const backgroundLoop = warmSource.indexOf(
-    'for (let index = 0; index < manifest.files.length; index += 1)'
+    'for (let index = 0; index < cacheableFiles.length; index += 1)'
   );
   const pruneGate = warmSource.indexOf('await pruneOldBuildCaches(manifest)');
   const completion = warmSource.indexOf('status: "complete"');
@@ -36,12 +36,16 @@ test('cache warming is background-only and never reports an early completion', (
   assert.equal(warmSource.match(/status: "complete"/g)?.length, 1);
   assert.match(warmSource, /background: true/);
   assert.match(warmSource, /status: "incomplete"/);
+  assert.match(warmSource, /manifest\.files\.filter\(isCacheVerifiableBuildFile\)/);
+  assert.match(warmSource, /streamedFiles: streamedFiles\.map/);
   assert.match(warmSource, /status: controller\.signal\.aborted[\s\S]+\? "cancelled"[\s\S]+: "error"/);
   assert.doesNotMatch(warmSource, /addAll\s*\(/);
 });
 
 test('old build caches are pruned only after the current build is complete', () => {
-  const failedGate = source.indexOf('if (failedFiles.length > 0)');
+  const failedGate = source.indexOf(
+    'if (failedFiles.length > 0 || streamedFiles.length > 0)'
+  );
   const pruneGate = source.indexOf('await pruneOldBuildCaches(manifest)');
   const backgroundComplete = source.indexOf('status: "complete"');
 
@@ -50,13 +54,41 @@ test('old build caches are pruned only after the current build is complete', () 
   assert.ok(backgroundComplete > pruneGate);
   assert.match(
     source,
-    /if \(failedFiles\.length > 0\) \{[\s\S]*?status: "incomplete"[\s\S]*?return;[\s\S]*?\}/
+    /if \(failedFiles\.length > 0 \|\| streamedFiles\.length > 0\) \{[\s\S]*?status: "incomplete"[\s\S]*?return;[\s\S]*?\}/
   );
   assert.match(
     source,
     /oldBuildCaches\.slice\(-RETAINED_OLD_BUILD_CACHES\)/
   );
   assert.match(source, /const RETAINED_OLD_BUILD_CACHES = 2/);
+});
+
+test('large Unity data streams directly until a verified page cache is committed', () => {
+  assert.match(
+    source,
+    /const isCacheVerifiableBuildFile = \(file\) =>[\s\S]*?file\.size <= BUILD_CACHE_MAX_ENTRY_BYTES[\s\S]*?file\.responseSha256/
+  );
+  assert.match(source, /const BUILD_CACHE_MAX_ENTRY_BYTES = 64 \* 1024 \* 1024/);
+  assert.match(
+    source,
+    /!buildFitsCacheBudget\(manifest\) \|\|\s*\(!isCacheVerifiableBuildFile\(file\)[\s\S]*?!\(allowLarge && isPageVerifiableLargeBuildFile\(file\)\)\) \|\|\s*request\.headers\.has\("range"\)/
+  );
+  assert.match(
+    source,
+    /url\.searchParams\.get\(BUILD_CACHE_READY_QUERY\) === "1"/
+  );
+  assert.match(source, /hasVerifiedLargeBuildFile\(cache, manifest, file\)/);
+  assert.match(source, /cacheOnly: true, allowLarge: true/);
+  assert.match(source, /WGP-CACHE-MISS/);
+  const directStreamGate = source.indexOf(
+    'if (isDirectStreamBuildRequest(event.request.url))'
+  );
+  const buildRespondWith = source.indexOf(
+    'event.respondWith(\n    getBuildManifest()',
+    directStreamGate
+  );
+  assert.ok(directStreamGate > 0);
+  assert.ok(buildRespondWith > directStreamGate);
 });
 
 test('activation preserves rollback and scene caches', () => {

@@ -16,8 +16,11 @@ const SCENE_RESOURCE_ENDPOINT = "__xrugc_scene_resource__";
 const LEGACY_SCENE_RESOURCE_ENDPOINT = "__xrugc_proxy__";
 const PLATFORM_API_ALIAS_SEGMENT = "platform-api";
 const BUILD_REVISION_QUERY = "__xrugc_build";
+const BUILD_CACHE_READY_QUERY = "__xrugc_cache_ready";
+const BUILD_CACHE_READY_PATH = "__xrugc_build_cache_ready__";
 const BUILD_CACHE_MAX_ENTRIES = 8;
 const BUILD_CACHE_MAX_BYTES = 768 * 1024 * 1024;
+const BUILD_CACHE_MAX_ENTRY_BYTES = 64 * 1024 * 1024;
 const RETAINED_OLD_BUILD_CACHES = 2;
 const SCENE_CACHE_MAX_ENTRIES = 120;
 const SCENE_CACHE_MAX_BYTES = 128 * 1024 * 1024;
@@ -84,6 +87,10 @@ const isValidBuildManifest = (manifest) => {
       !(
         file.responseSha256 === null ||
         /^[a-f0-9]{64}$/.test(file.responseSha256 || "")
+      ) ||
+      !(
+        file.responseSize === null ||
+        (Number.isSafeInteger(file.responseSize) && file.responseSize > 0)
       ) ||
       !["identity", "gzip", "br"].includes(file.contentEncoding) ||
       typeof file.contentType !== "string" ||
@@ -180,6 +187,7 @@ const buildCacheKeyForRevision = (requestOrUrl, buildId) => {
     typeof requestOrUrl === "string" ? requestOrUrl : requestOrUrl.url
   );
   url.searchParams.set(BUILD_REVISION_QUERY, buildId);
+  url.searchParams.delete(BUILD_CACHE_READY_QUERY);
   return new Request(url.toString(), {
     credentials: "same-origin",
   });
@@ -188,9 +196,67 @@ const buildCacheKeyForRevision = (requestOrUrl, buildId) => {
 const buildCacheKey = (requestOrUrl, manifest) =>
   buildCacheKeyForRevision(requestOrUrl, manifest.buildId);
 
+const buildCacheReadyKey = (manifest, file) => {
+  const url = scopeUrl(BUILD_CACHE_READY_PATH);
+  url.searchParams.set("v", manifest.buildId);
+  url.searchParams.set("role", file.role);
+  return new Request(url.toString(), { credentials: "same-origin" });
+};
+
 const buildFitsCacheBudget = (manifest) =>
   manifest.files.length <= BUILD_CACHE_MAX_ENTRIES &&
   manifest.totalSize <= BUILD_CACHE_MAX_BYTES;
+
+// Very large Unity responses must not be tied to the Service Worker lifetime.
+// Keep verification caching for bounded artifacts and stream larger artifacts
+// through the browser network stack.
+const isCacheVerifiableBuildFile = (file) =>
+  Boolean(
+    file &&
+      file.size <= BUILD_CACHE_MAX_ENTRY_BYTES &&
+      /^[a-f0-9]{64}$/.test(file.responseSha256 || "")
+  );
+
+const isPageVerifiableLargeBuildFile = (file) =>
+  Boolean(
+    file &&
+      file.size > BUILD_CACHE_MAX_ENTRY_BYTES &&
+      /^[a-f0-9]{64}$/.test(file.responseSha256 || "") &&
+      Number.isSafeInteger(file.responseSize) &&
+      file.responseSize > 0
+  );
+
+const buildFileRequest = (manifest, file) => {
+  const url = scopeUrl(file.url);
+  url.searchParams.set("v", manifest.buildId);
+  return new Request(url.toString(), { credentials: "same-origin" });
+};
+
+const hasVerifiedLargeBuildFile = async (cache, manifest, file) => {
+  if (!isPageVerifiableLargeBuildFile(file)) return false;
+  const marker = await cache.match(buildCacheReadyKey(manifest, file));
+  const response = await cache.match(
+    buildCacheKey(buildFileRequest(manifest, file), manifest)
+  );
+  if (!marker || !response) return false;
+  try {
+    const metadata = await marker.json();
+    return Boolean(
+      metadata &&
+        metadata.buildId === manifest.buildId &&
+        metadata.role === file.role &&
+        metadata.responseSha256 === file.responseSha256 &&
+        metadata.responseSize === file.responseSize
+    );
+  } catch {
+    return false;
+  }
+};
+
+const isDirectStreamBuildRequest = (requestUrl) => {
+  const pathname = new URL(requestUrl).pathname;
+  return scopeUrl("Build/public.data.gz").pathname === pathname;
+};
 
 const isOwnedBuildCache = (name) =>
   name !== BUILD_META_CACHE_NAME &&
@@ -297,6 +363,7 @@ const warmPreviewCache = async (clientId) => {
   }
 
   const total = manifest.files.length;
+  const cacheableFiles = manifest.files.filter(isCacheVerifiableBuildFile);
   await postBuildCacheStatus(clientId, manifest, {
     status: "background-started",
     completed: 0,
@@ -319,9 +386,20 @@ const warmPreviewCache = async (clientId) => {
 
   try {
     const cache = await caches.open(buildCacheName(manifest));
+    const verifiedLargeFiles = [];
+    const streamedFiles = [];
+    for (const file of manifest.files.filter(
+      (candidate) => !isCacheVerifiableBuildFile(candidate)
+    )) {
+      if (await hasVerifiedLargeBuildFile(cache, manifest, file)) {
+        verifiedLargeFiles.push(file);
+      } else {
+        streamedFiles.push(file);
+      }
+    }
     const failedFiles = [];
-    for (let index = 0; index < manifest.files.length; index += 1) {
-      const file = manifest.files[index];
+    for (let index = 0; index < cacheableFiles.length; index += 1) {
+      const file = cacheableFiles[index];
       const cached = await warmBuildFile(
         cache,
         manifest,
@@ -339,15 +417,19 @@ const warmPreviewCache = async (clientId) => {
       });
     }
 
-    if (failedFiles.length > 0) {
+    if (failedFiles.length > 0 || streamedFiles.length > 0) {
       await postBuildCacheStatus(clientId, manifest, {
         status: "incomplete",
         background: true,
-        completed: total - failedFiles.length,
+        completed:
+          cacheableFiles.length - failedFiles.length + verifiedLargeFiles.length,
         total,
         path: "",
         failedFiles,
-        message: "One or more Unity artifacts were not cached",
+        streamedFiles: streamedFiles.map((file) => file.url),
+        message: streamedFiles.length
+          ? "Non-verifiable Unity artifacts use direct streaming"
+          : "One or more Unity artifacts were not cached",
       });
       return;
     }
@@ -663,7 +745,19 @@ const unavailableBuildRevisionResponse = (buildId) =>
     }
   );
 
-const handleBuildRequest = async (event) => {
+const unavailableVerifiedCacheResponse = () =>
+  new Response("WGP-CACHE-MISS: verified Unity data cache is unavailable", {
+    status: 409,
+    headers: {
+      "cache-control": "no-store",
+      "content-type": "text/plain; charset=utf-8",
+    },
+  });
+
+const handleBuildRequest = async (
+  event,
+  { cacheOnly = false, allowLarge = false } = {}
+) => {
   const request = event.request;
   let manifest;
   try {
@@ -694,6 +788,8 @@ const handleBuildRequest = async (event) => {
   if (
     !file ||
     !buildFitsCacheBudget(manifest) ||
+    (!isCacheVerifiableBuildFile(file) &&
+      !(allowLarge && isPageVerifiableLargeBuildFile(file))) ||
     request.headers.has("range")
   ) {
     return fetch(request);
@@ -703,7 +799,13 @@ const handleBuildRequest = async (event) => {
     const cache = await caches.open(buildCacheName(manifest));
     const key = buildCacheKey(request, manifest);
     const cached = await cache.match(key);
-    if (cached) return cached;
+    if (
+      cached &&
+      (!cacheOnly || (await hasVerifiedLargeBuildFile(cache, manifest, file)))
+    ) {
+      return cached;
+    }
+    if (cacheOnly) return unavailableVerifiedCacheResponse();
 
     const acquisition = buildArtifactCoordinator.foreground({
       cache,
@@ -772,6 +874,21 @@ self.addEventListener("fetch", (event) => {
     const targetUrl = normalizeSceneResourceTargetUrl(event.request.url);
     if (targetUrl && isAllowedSceneResourceRequestContext(event.request)) {
       event.respondWith(handleSceneResourceRequest(event, targetUrl));
+    }
+    return;
+  }
+
+  // Do not call respondWith for the large Unity data artifact. This
+  // gives the browser's native network loader full ownership of the stream and
+  // prevents a slow download from being terminated with the Service Worker.
+  if (isDirectStreamBuildRequest(event.request.url)) {
+    if (
+      !event.request.headers.has("range") &&
+      url.searchParams.get(BUILD_CACHE_READY_QUERY) === "1"
+    ) {
+      event.respondWith(
+        handleBuildRequest(event, { cacheOnly: true, allowLarge: true })
+      );
     }
     return;
   }

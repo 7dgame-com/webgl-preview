@@ -131,6 +131,8 @@ const I18N = {
     enterValidSceneId: "请输入有效场景号",
     loadingPlugin: "正在加载 WebGL 插件",
     loadingPluginDetail: "0% 正在加载 Unity WebGL 运行环境，请稍候。",
+    loadingRuntimePercent:
+      "{percent}% 正在加载 Unity WebGL 运行环境，首次加载体积较大，请稍候。",
     loadingPluginGuard:
       "0% 正在加载 Unity WebGL 运行环境，请勿切换场景或重复点击。",
     loadingPluginFallback: "正在加载 Unity WebGL 运行环境，请稍候。",
@@ -161,6 +163,7 @@ const I18N = {
     runnerReady: "Unity runner 已就绪。",
     runnerAccepted: "Unity runner 已接收场景。",
     cacheFailed: "插件缓存失败，将继续尝试直接加载。",
+    cacheStreaming: "插件缓存已准备，大型 Unity 数据文件将由浏览器直接加载。",
     tokenSaved: "本地开发 Token 已在本次页面中启用。",
     tokenCleared: "本地开发 Token 已从内存清空。",
     opened: "WebGL 场景运行器已打开。",
@@ -214,6 +217,8 @@ const I18N = {
     enterValidSceneId: "請輸入有效場景號",
     loadingPlugin: "正在載入 WebGL 插件",
     loadingPluginDetail: "0% 正在載入 Unity WebGL 執行環境，請稍候。",
+    loadingRuntimePercent:
+      "{percent}% 正在載入 Unity WebGL 執行環境，首次載入檔案較大，請稍候。",
     loadingPluginGuard:
       "0% 正在載入 Unity WebGL 執行環境，請勿切換場景或重複點擊。",
     loadingPluginFallback: "正在載入 Unity WebGL 執行環境，請稍候。",
@@ -244,6 +249,7 @@ const I18N = {
     runnerReady: "Unity runner 已就緒。",
     runnerAccepted: "Unity runner 已接收場景。",
     cacheFailed: "插件快取失敗，將繼續嘗試直接載入。",
+    cacheStreaming: "插件快取已準備，大型 Unity 資料檔將由瀏覽器直接載入。",
     tokenSaved: "本機開發 Token 已在本頁啟用。",
     tokenCleared: "本機開發 Token 已從記憶體清除。",
     opened: "WebGL 場景運行器已開啟。",
@@ -297,6 +303,8 @@ const I18N = {
     enterValidSceneId: "Enter a valid scene ID",
     loadingPlugin: "Loading WebGL Plugin",
     loadingPluginDetail: "0% Loading the Unity WebGL runtime. Please wait.",
+    loadingRuntimePercent:
+      "{percent}% Loading the Unity WebGL runtime. The first load is large and may take a few minutes.",
     loadingPluginGuard:
       "0% Loading the Unity WebGL runtime. Do not switch scenes or click repeatedly.",
     loadingPluginFallback: "Loading the Unity WebGL runtime. Please wait.",
@@ -327,6 +335,7 @@ const I18N = {
     runnerReady: "Unity runner is ready.",
     runnerAccepted: "Unity runner accepted the scene.",
     cacheFailed: "Plugin cache failed. Continuing with direct loading.",
+    cacheStreaming: "Plugin cache is ready. The browser will stream the large Unity data file directly.",
     tokenSaved: "The local development token is active for this page only.",
     tokenCleared: "The local development token was cleared from memory.",
     opened: "WebGL scene runner opened.",
@@ -380,6 +389,8 @@ const I18N = {
     enterValidSceneId: "有効なシーン ID を入力してください",
     loadingPlugin: "WebGL プラグインを読み込み中",
     loadingPluginDetail: "0% Unity WebGL ランタイムを読み込み中です。しばらくお待ちください。",
+    loadingRuntimePercent:
+      "{percent}% Unity WebGL ランタイムを読み込み中です。初回は大容量のため、しばらくお待ちください。",
     loadingPluginGuard:
       "0% Unity WebGL ランタイムを読み込み中です。シーンを切り替えたり連続クリックしたりしないでください。",
     loadingPluginFallback: "Unity WebGL ランタイムを読み込み中です。しばらくお待ちください。",
@@ -410,6 +421,7 @@ const I18N = {
     runnerReady: "Unity runner の準備ができました。",
     runnerAccepted: "Unity runner がシーンを受信しました。",
     cacheFailed: "プラグインのキャッシュに失敗しました。直接読み込みを続行します。",
+    cacheStreaming: "プラグインのキャッシュを準備しました。大容量の Unity データはブラウザが直接読み込みます。",
     tokenSaved: "ローカル開発 Token をこのページでのみ有効にしました。",
     tokenCleared: "ローカル開発 Token をメモリから消去しました。",
     opened: "WebGL シーンランナーを開きました。",
@@ -463,6 +475,8 @@ const I18N = {
     enterValidSceneId: "กรุณากรอกรหัสฉากที่ถูกต้อง",
     loadingPlugin: "กำลังโหลดปลั๊กอิน WebGL",
     loadingPluginDetail: "0% กำลังโหลด Unity WebGL runtime กรุณารอสักครู่",
+    loadingRuntimePercent:
+      "{percent}% กำลังโหลด Unity WebGL runtime การโหลดครั้งแรกมีขนาดใหญ่และอาจใช้เวลาสักครู่",
     loadingPluginGuard:
       "0% กำลังโหลด Unity WebGL runtime กรุณาอย่าสลับฉากหรือคลิกซ้ำ",
     loadingPluginFallback: "กำลังโหลด Unity WebGL runtime กรุณารอสักครู่",
@@ -493,6 +507,7 @@ const I18N = {
     runnerReady: "Unity runner พร้อมแล้ว",
     runnerAccepted: "Unity runner รับฉากแล้ว",
     cacheFailed: "แคชปลั๊กอินไม่สำเร็จ จะลองโหลดโดยตรงต่อไป",
+    cacheStreaming: "เตรียมแคชปลั๊กอินแล้ว เบราว์เซอร์จะโหลดไฟล์ข้อมูล Unity ขนาดใหญ่โดยตรง",
     tokenSaved: "เปิดใช้ Token สำหรับพัฒนาเฉพาะหน้านี้แล้ว",
     tokenCleared: "ล้าง Token สำหรับพัฒนาออกจากหน่วยความจำแล้ว",
     opened: "เปิด WebGL scene runner แล้ว",
@@ -2826,7 +2841,19 @@ function setupFrame() {
         state.cacheActive = false;
         hideLoadingShieldIfReady();
         if (message.status === "incomplete") {
-          log(t("cacheFailed"), { code: "WGP-CACHE-INCOMPLETE" });
+          const failedFiles = Array.isArray(message.failedFiles)
+            ? message.failedFiles
+            : [];
+          const streamedFiles = Array.isArray(message.streamedFiles)
+            ? message.streamedFiles
+            : [];
+          if (streamedFiles.length > 0 && failedFiles.length === 0) {
+            log(t("cacheStreaming"), {
+              streamedFiles: streamedFiles.map(safeResourceLabel),
+            });
+          } else {
+            log(t("cacheFailed"), { code: "WGP-CACHE-INCOMPLETE" });
+          }
         }
       }
 
