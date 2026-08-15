@@ -202,6 +202,22 @@ test('My Scenes is the default accessible production interaction', () => {
   assert.match(html, /data-run-error[\s\S]*?role="alert"|role="alert"[\s\S]*?data-run-error/);
 });
 
+test('Unity preview fills the viewer below the toolbar with square corners', () => {
+  assert.match(
+    css,
+    /\.viewer\s*\{[\s\S]*?padding:\s*0;[\s\S]*?background:\s*#2d3b4c;/
+  );
+  assert.match(
+    css,
+    /\.preview-surface\s*\{[\s\S]*?border-radius:\s*0;[\s\S]*?clip-path:\s*none;/
+  );
+  assert.match(
+    css,
+    /\.idle-hint\s*\{[\s\S]*?inset:\s*0;[\s\S]*?border-radius:\s*0;/
+  );
+  assert.match(css, /\.loading-shield\s*\{[\s\S]*?inset:\s*0;/);
+});
+
 test('scene list uses the authenticated fixed Platform API contract', () => {
   assert.match(source, /resolvePlatformUrl\("v1\/verses"\)/);
   assert.match(source, /url\.searchParams\.set\("sort", "-updated_at"\)/);
