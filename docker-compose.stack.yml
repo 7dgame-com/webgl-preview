@@ -9,6 +9,7 @@ services:
       - REQUIRE_TRUSTED_HOST_ORIGINS=1
       - TRUSTED_HOST_ORIGINS_JSON=${WEBGL_PREVIEW_D_TRUSTED_HOST_ORIGINS_JSON:?Set an exact JSON array from the deployment inventory}
     labels:
+      - com.centurylinklabs.watchtower.enable=true
       - traefik.enable=true
       - traefik.docker.network=proxy
       - traefik.http.routers.webgl-preview-d.rule=Host(`webgl-preview-d.plugins.xrugc.com`)
@@ -35,7 +36,7 @@ services:
     restart: unless-stopped
 
   webgl-preview:
-    image: hkccr.ccs.tencentyun.com/plugins/webgl-preview:publish
+    image: hkccr.ccs.tencentyun.com/plugins/webgl-preview:latest
     networks:
       - proxy
       - internal
@@ -44,6 +45,7 @@ services:
       - REQUIRE_TRUSTED_HOST_ORIGINS=1
       - TRUSTED_HOST_ORIGINS_JSON=${WEBGL_PREVIEW_TRUSTED_HOST_ORIGINS_JSON:?Set an exact JSON array from the deployment inventory}
     labels:
+      - com.centurylinklabs.watchtower.enable=true
       - traefik.enable=true
       - traefik.docker.network=proxy
       - traefik.http.routers.webgl-preview.rule=Host(`webgl-preview.plugins.xrugc.com`)
