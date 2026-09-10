@@ -398,6 +398,7 @@
             return true;
           } catch (error) {
             console.error("[WebPreview] Failed to send scene json to Unity.", error);
+            window.parent.postMessage({ type: "unity-web-preview-error", code: "SCENE_FORWARD_FAILED" }, "*");
             return false;
           }
         }
@@ -494,6 +495,9 @@
 
       var script = document.createElement("script");
       script.src = loaderUrl;
+      script.onerror = () => {
+        window.parent.postMessage({ type: "unity-web-preview-error", code: "UNITY_LOAD_FAILED" }, "*");
+      };
       script.onload = () => {
         createUnityInstance(canvas, config, (progress) => {
           document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
@@ -506,6 +510,7 @@
                 createWebPreviewBridge(unityInstance);
 
               }).catch((message) => {
+                window.parent.postMessage({ type: "unity-web-preview-error", code: "UNITY_LOAD_FAILED" }, "*");
                 alert(message);
               });
             };
