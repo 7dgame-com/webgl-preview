@@ -1107,6 +1107,13 @@
             return true;
           } catch (error) {
             console.error("[WebPreview] Failed to send scene json to Unity.", error);
+            if (webPreviewEmbedded) {
+              postWebPreviewParent({
+                type: "unity-web-preview-error",
+                code: "SCENE_FORWARD_FAILED",
+                message: "Failed to send scene data to Unity."
+              });
+            }
             return false;
           }
         }
