@@ -4,4 +4,3 @@ FROM ${PREVIOUS_UNITY_IMAGE}
 
 RUN rm -rf /usr/share/nginx/html/Build && mkdir -p /usr/share/nginx/html/Build
 COPY public/Build/ /usr/share/nginx/html/Build/
-

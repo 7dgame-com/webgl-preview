@@ -69,4 +69,3 @@ jobs:
 
       - name: Report immutable digest
         run: echo "UNITY_BASE_IMAGE=${TENCENT_REGISTRY}/${TENCENT_IMAGE_NAME}@${{ steps.build.outputs.digest }}"
-
