@@ -14,7 +14,7 @@ on:
 env:
   TENCENT_REGISTRY: hkccr.ccs.tencentyun.com
   TENCENT_IMAGE_NAME: plugins/webgl-preview
-  WEBGL_PREVIEW_BASE_IMAGE: ${{ vars.WEBGL_PREVIEW_BASE_IMAGE || 'hkccr.ccs.tencentyun.com/plugins/webgl-preview@sha256:99b2cbbf35d369eea1cabf4a545e3d2e62d64e0810dbd680116c3ab35b1fa983' }}
+  WEBGL_PREVIEW_BASE_IMAGE: ${{ vars.WEBGL_PREVIEW_BASE_IMAGE || 'hkccr.ccs.tencentyun.com/plugins/webgl-preview@sha256:1e03190d0b44ca204869461862859198a801edb3b4c1bf00e8ee5e8da1d9bfe5' }}
 
 jobs:
   test:

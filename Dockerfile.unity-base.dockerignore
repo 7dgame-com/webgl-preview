@@ -1,5 +1,0 @@
-*
-!Dockerfile.unity-base
-!public/
-!public/Build/
-!public/Build/**
