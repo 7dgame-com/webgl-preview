@@ -1,0 +1,7 @@
+ARG PREVIOUS_UNITY_IMAGE=hkccr.ccs.tencentyun.com/plugins/webgl-preview@sha256:1e03190d0b44ca204869461862859198a801edb3b4c1bf00e8ee5e8da1d9bfe5
+
+FROM ${PREVIOUS_UNITY_IMAGE}
+
+RUN rm -rf /usr/share/nginx/html/Build && mkdir -p /usr/share/nginx/html/Build
+COPY public/Build/ /usr/share/nginx/html/Build/
+

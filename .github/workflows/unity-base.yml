@@ -1,0 +1,72 @@
+name: "Build: Unity WebGL base"
+
+on:
+  push:
+    branches: [codex/webgl-oom-base]
+    paths:
+      - public/Build/**
+      - Dockerfile.unity-base
+      - Dockerfile.unity-base.dockerignore
+      - .github/workflows/unity-base.yml
+
+env:
+  TENCENT_REGISTRY: hkccr.ccs.tencentyun.com
+  TENCENT_IMAGE_NAME: plugins/webgl-preview
+
+jobs:
+  publish-unity-base:
+    name: Verify and publish immutable Unity base
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Unity artifacts
+        uses: actions/checkout@v5
+        with:
+          lfs: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+
+      - name: Verify Unity artifact set
+        run: node scripts/build-manifest.js generate --root public --output /tmp/unity-build-manifest.json
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Tencent Cloud Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.TENCENT_REGISTRY }}
+          username: ${{ secrets.TENCENT_REGISTRY_USER }}
+          password: ${{ secrets.TENCENT_REGISTRY_PASSWORD }}
+
+      - name: Build and push Unity base
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.unity-base
+          push: true
+          tags: ${{ env.TENCENT_REGISTRY }}/${{ env.TENCENT_IMAGE_NAME }}:unity-${{ github.sha }}
+          provenance: false
+          sbom: false
+
+      - name: Verify pushed immutable image
+        env:
+          IMAGE_REF: ${{ env.TENCENT_REGISTRY }}/${{ env.TENCENT_IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+        run: |
+          docker pull "${IMAGE_REF}"
+          docker run --rm "${IMAGE_REF}" sh -ec '
+            test "$(find /usr/share/nginx/html/Build -maxdepth 1 -type f | wc -l)" -eq 4
+            test -s /usr/share/nginx/html/Build/public.loader.js
+            test -s /usr/share/nginx/html/Build/23374217cb0db2456a9a8a1d5cc1447a.data.br
+            test -s /usr/share/nginx/html/Build/7b88fa480d87dcc6cd14c97f1ea21573.framework.js.br
+            test -s /usr/share/nginx/html/Build/80cf5fe50fb617ad94ec847f08c2ecad.wasm.br
+          '
+
+      - name: Report immutable digest
+        run: echo "UNITY_BASE_IMAGE=${TENCENT_REGISTRY}/${TENCENT_IMAGE_NAME}@${{ steps.build.outputs.digest }}"
+
