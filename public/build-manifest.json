@@ -18,8 +18,8 @@
       "url": "Build/7e6cf9d287dd75ec324804e36de42155.data.br",
       "size": 114442452,
       "sha256": "9359627243232ebd6413b02d9193bca22bddd0203aa32787fbb3b38dd166b91b",
-      "responseSha256": "18e1b4d8cdb9e50c6b7f25f234e943d53139cf232dacf35c2c96626f74cad359",
-      "responseSize": 149148338,
+      "responseSha256": null,
+      "responseSize": null,
       "contentEncoding": "br",
       "contentType": "application/octet-stream"
     },
@@ -28,8 +28,8 @@
       "url": "Build/9b9e535f17c2fe035ae9cf19ae150da4.framework.js.br",
       "size": 84248,
       "sha256": "4931115f32f5ebf1ad8449f95a03833be1ba06796311aa6c69c9971760106c29",
-      "responseSha256": "d0699d5490e5143340e6e6a92f62c86111b58e84cfa6faeb8eabb920c5fa393f",
-      "responseSize": 522569,
+      "responseSha256": null,
+      "responseSize": null,
       "contentEncoding": "br",
       "contentType": "application/javascript"
     },
@@ -38,8 +38,8 @@
       "url": "Build/d77af484d0e4fcbf7927ae8774f82ff9.wasm.br",
       "size": 10685846,
       "sha256": "af8465ccea244715e4d926b6e5c92e59f634885d9508b69953ccfbaa014ac364",
-      "responseSha256": "6d7a9bc86a8131d0b6b9faa7424ade26c1e63e1c9cc47c849758a9ab0e5c6a6f",
-      "responseSize": 51567420,
+      "responseSha256": null,
+      "responseSize": null,
       "contentEncoding": "br",
       "contentType": "application/wasm"
     }
