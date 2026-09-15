@@ -81,8 +81,8 @@ Local source keeps a placeholder and displays `vdev` rather than claiming a
 release time.
 
 The currently approved base is
-`hkccr.ccs.tencentyun.com/plugins/webgl-preview@sha256:1d9c56788ed18028c7dd04b78e1a3d76403fc3e494332e3d454a32628bdced98`.
-It contains the Unity build from iOS source revision `b6eafd8`, which avoids
+`hkccr.ccs.tencentyun.com/plugins/webgl-preview@sha256:99b2cbbf35d369eea1cabf4a545e3d2e62d64e0810dbd680116c3ab35b1fa983`.
+It contains the Unity build from iOS source revision `c8fec51`, which avoids
 duplicating all scene resources before entity loading in WebGL preview.
 
 Run `npm run test:docker` for the same final-image gate locally. It builds the

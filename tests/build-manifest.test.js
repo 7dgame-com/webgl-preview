@@ -182,18 +182,18 @@ test('release metadata approves only an explicit Shell and Unity build pair', (t
   assert.deepEqual(verifyArtifactCompatibility({ rootDir: sourceRoot }), {
     previewShellVersion: '2026.08.01.4',
     unityBuildId:
-      'sha256:78c774aa364edc7d99058c710da9e56b7bfd4fb006bafd3605b2bafa73aee7c3',
+      'sha256:20035a0899c00b11b636b6c6448680203aa8011048d05a54e2f5d909d77e8a55',
   });
   assert.deepEqual(
     verifyArtifactCompatibility({
       rootDir: sourceRoot,
       baseImage:
-        'hkccr.ccs.tencentyun.com/plugins/webgl-preview@sha256:1d9c56788ed18028c7dd04b78e1a3d76403fc3e494332e3d454a32628bdced98',
+        'hkccr.ccs.tencentyun.com/plugins/webgl-preview@sha256:99b2cbbf35d369eea1cabf4a545e3d2e62d64e0810dbd680116c3ab35b1fa983',
     }),
     {
       previewShellVersion: '2026.08.01.4',
       unityBuildId:
-        'sha256:78c774aa364edc7d99058c710da9e56b7bfd4fb006bafd3605b2bafa73aee7c3',
+        'sha256:20035a0899c00b11b636b6c6448680203aa8011048d05a54e2f5d909d77e8a55',
     }
   );
   assert.throws(

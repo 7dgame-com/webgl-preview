@@ -61,7 +61,7 @@ The Unity build is inherited from an existing WebGL Preview image. Prefer an
 immutable reference even for local verification:
 
 ```bash
-export WEBGL_PREVIEW_BASE_IMAGE='hkccr.ccs.tencentyun.com/plugins/webgl-preview@sha256:1d9c56788ed18028c7dd04b78e1a3d76403fc3e494332e3d454a32628bdced98'
+export WEBGL_PREVIEW_BASE_IMAGE='hkccr.ccs.tencentyun.com/plugins/webgl-preview@sha256:99b2cbbf35d369eea1cabf4a545e3d2e62d64e0810dbd680116c3ab35b1fa983'
 export REQUIRE_APPROVED_BUILD=1
 export HOST_API_BASE='https://d.dev.xrugc.com'
 docker compose build
@@ -99,8 +99,8 @@ CI already falls back to the immutable reference shown above. Optionally set
 the GitHub repository variable `WEBGL_PREVIEW_BASE_IMAGE` to replace that
 checked-in default with another reviewed immutable reference. The current value
 resolves the image built from source revision
-`b6eafd8fdfd027328abd45a448092b1c89bd263f` and approved Unity build
-`sha256:78c774aa364edc7d99058c710da9e56b7bfd4fb006bafd3605b2bafa73aee7c3`.
+`c8fec510781f7ed87bb97d218e248460a7ca6439` and approved Unity build
+`sha256:20035a0899c00b11b636b6c6448680203aa8011048d05a54e2f5d909d77e8a55`.
 Registry credentials remain in
 `TENCENT_REGISTRY_USER` and `TENCENT_REGISTRY_PASSWORD` secrets. The workflow
 then publishes:

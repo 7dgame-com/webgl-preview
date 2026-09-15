@@ -42,6 +42,13 @@
       "unityBaseImage": "hkccr.ccs.tencentyun.com/plugins/webgl-preview@sha256:1d9c56788ed18028c7dd04b78e1a3d76403fc3e494332e3d454a32628bdced98",
       "sourceRevision": "b6eafd8fdfd027328abd45a448092b1c89bd263f",
       "status": "approved"
+    },
+    {
+      "previewShellVersion": "2026.08.01.4",
+      "unityBuildId": "sha256:20035a0899c00b11b636b6c6448680203aa8011048d05a54e2f5d909d77e8a55",
+      "unityBaseImage": "hkccr.ccs.tencentyun.com/plugins/webgl-preview@sha256:99b2cbbf35d369eea1cabf4a545e3d2e62d64e0810dbd680116c3ab35b1fa983",
+      "sourceRevision": "c8fec510781f7ed87bb97d218e248460a7ca6439",
+      "status": "approved"
     }
   ]
 }
