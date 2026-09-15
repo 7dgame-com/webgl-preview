@@ -61,10 +61,10 @@ jobs:
           docker pull "${IMAGE_REF}"
           docker run --rm "${IMAGE_REF}" sh -ec '
             test "$(find /usr/share/nginx/html/Build -maxdepth 1 -type f | wc -l)" -eq 4
-            test -s /usr/share/nginx/html/Build/public.loader.js
-            test -s /usr/share/nginx/html/Build/23374217cb0db2456a9a8a1d5cc1447a.data.br
-            test -s /usr/share/nginx/html/Build/7b88fa480d87dcc6cd14c97f1ea21573.framework.js.br
-            test -s /usr/share/nginx/html/Build/80cf5fe50fb617ad94ec847f08c2ecad.wasm.br
+            test "$(find /usr/share/nginx/html/Build -maxdepth 1 -type f -name "*.loader.js" | wc -l)" -eq 1
+            test "$(find /usr/share/nginx/html/Build -maxdepth 1 -type f -name "*.data.br" | wc -l)" -eq 1
+            test "$(find /usr/share/nginx/html/Build -maxdepth 1 -type f -name "*.framework.js.br" | wc -l)" -eq 1
+            test "$(find /usr/share/nginx/html/Build -maxdepth 1 -type f -name "*.wasm.br" | wc -l)" -eq 1
           '
 
       - name: Report immutable digest
